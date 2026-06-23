@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno con secretos (NUNCA subir). Se mantiene el ejemplo.
+.env
+.env.*
+!.env.example
+
+# Base SQLite de desarrollo
+*.db
+*.db-journal
+
+# Builds
+dist/
+dist-ssr/
+
+# Logs y temporales
+*.log
+.DS_Store
