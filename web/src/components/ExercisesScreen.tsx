@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Exercise } from '../types';
 import { useExercises } from '../hooks/useExercises';
 import { MUSCLE_GROUPS } from '../muscleGroups';
-import { Button, Card, Chip, IconButton, SectionLabel, Spinner, StateView } from './ui';
+import { Button, Card, Chip, IconButton, Modal, Spinner, StateView } from './ui';
 import { ExerciseForm } from './ExerciseForm';
 import {
   AlertTriangleIcon,
@@ -45,24 +45,22 @@ export function ExercisesScreen({ onSelect }: { onSelect: (exercise: Exercise) =
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Form de alta: plegado, se abre con un toque (pocos toques, mobile-first). */}
-      {adding ? (
-        <Card className="mx-auto flex w-full max-w-md flex-col gap-4">
-          <SectionLabel>Nuevo ejercicio</SectionLabel>
+      <Button onClick={() => setAdding(true)} className="w-full md:ml-auto md:w-auto">
+        <PlusIcon className="h-5 w-5" />
+        Agregar ejercicio
+      </Button>
+
+      {adding && (
+        <Modal title="Agregar ejercicio" onClose={() => setAdding(false)}>
           <ExerciseForm
-            submitLabel="Agregar"
+            submitLabel="Guardar"
             onSubmit={async (input) => {
               await add(input);
               setAdding(false);
             }}
             onCancel={() => setAdding(false)}
           />
-        </Card>
-      ) : (
-        <Button onClick={() => setAdding(true)} className="mx-auto w-full max-w-md">
-          <PlusIcon className="h-5 w-5" />
-          Agregar ejercicio
-        </Button>
+        </Modal>
       )}
 
       {status === 'loading' && <Spinner />}
@@ -86,24 +84,26 @@ export function ExercisesScreen({ onSelect }: { onSelect: (exercise: Exercise) =
           title="Todavía no hay ejercicios"
           subtitle="Agregá tu primer ejercicio para empezar a registrar tus series."
           action={
-            !adding && (
-              <Button onClick={() => setAdding(true)}>
-                <PlusIcon className="h-5 w-5" />
-                Agregar ejercicio
-              </Button>
-            )
+            <Button onClick={() => setAdding(true)}>
+              <PlusIcon className="h-5 w-5" />
+              Agregar ejercicio
+            </Button>
           }
         />
       )}
 
       {status === 'ready' && exercises.length > 0 && (
-        // 1 columna en celular (mobile-first); 2 columnas en pantalla ancha.
-        <div className="grid grid-cols-1 gap-x-5 gap-y-7 md:grid-cols-2">
+        // 1 columna en celular (mobile-first); hasta 3 columnas en pantalla ancha (masonry-ish).
+        <div className="grid grid-cols-1 items-start gap-x-5 gap-y-7 md:grid-cols-2 lg:grid-cols-3">
           {sections.map((section) => (
             <section key={section.key} className="flex flex-col gap-3">
-              <div className="flex items-baseline gap-2">
-                <SectionLabel>{section.label}</SectionLabel>
-                <span className="text-xs text-muted">{section.items.length}</span>
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                  {section.label}
+                </h2>
+                <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-muted">
+                  {section.items.length}
+                </span>
               </div>
               <ul className="flex flex-col gap-4">
                 {section.items.map((ex) => (
@@ -147,56 +147,55 @@ function ExerciseCard({
     }
   }
 
-  if (editing) {
-    return (
-      <Card className="flex flex-col gap-4">
-        <SectionLabel>Editar ejercicio</SectionLabel>
-        <ExerciseForm
-          initial={{
-            name: exercise.name,
-            target: exercise.target ?? '',
-            muscleGroup: exercise.muscleGroup ?? '',
-          }}
-          submitLabel="Guardar"
-          onSubmit={async (input) => {
-            await onEdit(exercise.id, input);
-            setEditing(false);
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      </Card>
-    );
-  }
-
   return (
-    <Card className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-2">
-          <p className="truncate text-lg font-semibold text-fg">{exercise.name}</p>
-          {exercise.target ? (
-            <Chip icon={<TargetIcon className="h-4 w-4 text-brand" />}>{exercise.target}</Chip>
-          ) : (
-            <span className="text-sm text-muted/70">Sin objetivo</span>
-          )}
+    <>
+      <Card className="flex flex-col gap-4 transition-colors hover:border-brand">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-2">
+            <p className="truncate text-lg font-bold text-fg">{exercise.name}</p>
+            {exercise.target ? (
+              <Chip icon={<TargetIcon className="h-4 w-4" />}>{exercise.target}</Chip>
+            ) : (
+              <span className="text-sm text-muted/70">Sin objetivo</span>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <IconButton aria-label="Editar ejercicio" onClick={() => setEditing(true)}>
+              <PencilIcon className="h-5 w-5" />
+            </IconButton>
+            <IconButton
+              aria-label="Borrar ejercicio"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="hover:bg-danger/10 hover:text-danger"
+            >
+              <TrashIcon className="h-5 w-5" />
+            </IconButton>
+          </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <IconButton aria-label="Editar ejercicio" onClick={() => setEditing(true)}>
-            <PencilIcon className="h-5 w-5" />
-          </IconButton>
-          <IconButton
-            aria-label="Borrar ejercicio"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="hover:bg-danger/10 hover:text-danger"
-          >
-            <TrashIcon className="h-5 w-5" />
-          </IconButton>
-        </div>
-      </div>
-      <Button onClick={() => onSelect(exercise)} className="w-full">
-        Registrar hoy
-      </Button>
-      {error && <p className="text-sm text-danger">{error}</p>}
-    </Card>
+        <Button variant="secondary" onClick={() => onSelect(exercise)} className="w-full">
+          Registrar hoy
+        </Button>
+        {error && <p className="text-sm text-danger">{error}</p>}
+      </Card>
+
+      {editing && (
+        <Modal title="Editar ejercicio" onClose={() => setEditing(false)}>
+          <ExerciseForm
+            initial={{
+              name: exercise.name,
+              target: exercise.target ?? '',
+              muscleGroup: exercise.muscleGroup ?? '',
+            }}
+            submitLabel="Guardar"
+            onSubmit={async (input) => {
+              await onEdit(exercise.id, input);
+              setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        </Modal>
+      )}
+    </>
   );
 }

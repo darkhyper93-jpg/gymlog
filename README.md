@@ -253,13 +253,23 @@ En progreso / falta:
   (GET /exercises/:id/sets) por día LOCAL, no UTC: entrenar es un evento local y agrupar por
   UTC partiría una sesión nocturna en dos días. La referencia a superar es el día previo más
   reciente; el alta de series es optimista con rollback si el POST falla.
-· Grupo muscular: lista fija de 7 (espalda, hombro, pecho, piernas, triceps, biceps, trapecio)
-  validada en el backend; se guarda como String? (no enum, porque SQLite no los soporta en
-  Prisma) y nullable para no romper ejercicios ya cargados (caen en la sección "Otros"). La
-  fuente de verdad de las claves/labels del frontend está en web/src/muscleGroups.ts.
+· Grupo muscular: lista fija de 8 (espalda, hombro, pecho, piernas, triceps, biceps, antebrazo,
+  trapecio) validada en el backend; se guarda como String? (no enum, porque SQLite no los soporta
+  en Prisma) y nullable para no romper ejercicios ya cargados (caen en la sección "Otros"). La
+  fuente de verdad de las claves/labels del frontend está en web/src/muscleGroups.ts. Al sumar un
+  grupo hay que tocar dos lugares: MUSCLE_GROUPS en api/src/exercises.ts y en web/src/muscleGroups.ts
+  (no hace falta db push porque el campo es String?).
 · "Columnas separadas" por grupo: en celular las secciones van apiladas (mobile-first; columnas
-  lado a lado no entran en ancho de teléfono) y a md+ pasan a 2 columnas ensanchando solo la
+  lado a lado no entran en ancho de teléfono) y a md+ pasan a 2-3 columnas ensanchando solo la
   vista de lista. El registro queda siempre angosto para enfocar una cosa a la vez.
+· Rediseño visual (UI generada con Google Stitch y portada a mano al stack): se mantuvieron los
+  tokens centralizados en web/src/index.css (se sumó --color-accent #e47014 para el RIR y
+  --color-surface-lowest para pills/inputs hundidos). Solo presentación: no se tocó la lógica ni
+  los endpoints. Se descartaron del output de Stitch las features fuera de alcance (bottom-nav,
+  pantalla "Progreso", ajustes) por no estar en el V1. Iconos siguen siendo SVG inline (Lucide),
+  no se sumó la fuente de iconos de Material que traía el export. El alta/edición de ejercicios
+  pasó a un Modal (web/src/components/ui.tsx) y el selector de grupo muscular a una grilla de
+  pills (radio) para tocar de un toque en el celu.
 · Login: tabla User + bcrypt (hash de password) + JWT (sin refresh tokens). El middleware
   requireAuth protege /exercises y /sets; un 401 en el frontend limpia el token y vuelve al
   login. Las variables van en api/.env: JWT_SECRET (firma del token) y se cargan con dotenv.

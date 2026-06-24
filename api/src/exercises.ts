@@ -14,6 +14,7 @@ const MUSCLE_GROUPS = [
   'piernas',
   'triceps',
   'biceps',
+  'antebrazo',
   'trapecio',
 ] as const;
 type MuscleGroup = (typeof MUSCLE_GROUPS)[number];

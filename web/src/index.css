@@ -5,13 +5,15 @@
 @theme {
   --color-bg: #0b0f14; /* fondo oscuro: legible en el gym, ahorra batería */
   --color-surface: #151b23; /* tarjetas / inputs */
-  --color-surface-2: #1d2530; /* hover / borde sutil */
+  --color-surface-2: #1d2530; /* modales / superficie elevada */
+  --color-surface-lowest: #0b0e15; /* pills e inputs hundidos dentro de una card */
   --color-border: #273140;
   --color-fg: #e6edf3; /* texto principal */
   --color-muted: #8b97a6; /* texto secundario */
   --color-brand: #2f81f7; /* acción primaria */
   --color-brand-strong: #1f6feb;
   --color-brand-soft: #16314f; /* fondo de chips/acentos (brand a baja intensidad) */
+  --color-accent: #e47014; /* acento cálido para el RIR (destaca sobre el azul) */
   --color-danger: #f0506e; /* borrar / error */
   --color-success: #2ea043;
 

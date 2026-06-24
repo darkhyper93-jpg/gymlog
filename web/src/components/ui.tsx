@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -5,14 +6,17 @@ import type {
   ReactNode,
   SelectHTMLAttributes,
 } from 'react';
+import { XIcon } from './icons';
 
 // Primitivas de UI mobile-first: targets táctiles grandes (min 44-52px), texto legible,
 // foco visible (accesibilidad) y transiciones suaves (150-300ms).
 
-type ButtonVariant = 'primary' | 'ghost' | 'danger';
+// 'secondary' = outline (acción no destacada, ej. "Registrar hoy"); 'primary' = acción principal.
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const buttonStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-brand hover:bg-brand-strong text-white',
+  primary: 'bg-brand hover:bg-brand-strong text-white shadow-lg shadow-brand/20',
+  secondary: 'border border-border bg-transparent text-muted hover:border-brand hover:text-fg',
   ghost: 'bg-surface-2 hover:bg-border text-fg',
   danger: 'bg-transparent hover:bg-danger/10 text-danger',
 };
@@ -58,7 +62,7 @@ export function TextInput({ className = '', ...props }: InputHTMLAttributes<HTML
     <input
       className={`min-h-[48px] w-full rounded-xl border border-border bg-surface px-4 text-base
         text-fg placeholder:text-muted outline-none transition-colors focus:border-brand
-        ${className}`}
+        focus:ring-1 focus:ring-brand ${className}`}
       {...props}
     />
   );
@@ -76,9 +80,9 @@ export function NumberField({
       <span className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
       <input
         inputMode="decimal"
-        className={`tabular min-h-[52px] w-full rounded-xl border border-border bg-surface px-2
+        className={`tabular min-h-[52px] w-full rounded-xl border border-border bg-surface-lowest px-2
           text-center text-lg font-semibold text-fg placeholder:text-muted/50 outline-none
-          transition-colors focus:border-brand ${className}`}
+          transition-colors focus:border-brand focus:ring-1 focus:ring-brand ${className}`}
         {...props}
       />
     </label>
@@ -125,12 +129,22 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-// Pastilla para datos breves (objetivo del ejercicio): icono + texto sobre acento suave.
-export function Chip({ icon, children }: { icon?: ReactNode; children: ReactNode }) {
+// Pastilla para datos breves. 'brand' (objetivo, acento azul) o 'neutral' (metadato, ej. grupo muscular).
+export function Chip({
+  icon,
+  tone = 'brand',
+  children,
+}: {
+  icon?: ReactNode;
+  tone?: 'brand' | 'neutral';
+  children: ReactNode;
+}) {
+  const toneStyles =
+    tone === 'brand' ? 'bg-brand-soft text-brand' : 'bg-surface-2 text-muted border border-border';
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1
-        text-sm font-medium text-fg"
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium
+        ${toneStyles}`}
     >
       {icon}
       {children}
@@ -164,6 +178,53 @@ export function Spinner() {
   return (
     <div className="flex justify-center py-16">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-brand" />
+    </div>
+  );
+}
+
+// Modal centrado mobile-first: overlay con blur, cierre por Escape / click afuera / botón X.
+// Bloquea el scroll del fondo mientras está abierto. El contenido lo provee quien lo usa.
+export function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface-2 shadow-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-lg font-semibold text-fg">{title}</h2>
+          <IconButton aria-label="Cerrar" onClick={onClose}>
+            <XIcon className="h-5 w-5" />
+          </IconButton>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
     </div>
   );
 }

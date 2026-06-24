@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
+import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
-import { AlertTriangleIcon, PlusIcon, TargetIcon } from './icons';
+import { AlertTriangleIcon, CheckCircleIcon, PlusIcon, TargetIcon } from './icons';
 
 // Pantalla "registrar hoy": el corazón del V1. Muestra objetivo + última vez para superar,
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
@@ -12,13 +13,16 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h2 className="text-2xl font-bold tracking-tight text-fg">{exercise.name}</h2>
-        {exercise.target ? (
-          <Chip icon={<TargetIcon className="h-4 w-4 text-brand" />}>{exercise.target}</Chip>
-        ) : (
-          <p className="text-sm text-muted/70">Sin objetivo definido</p>
-        )}
+      <header className="flex flex-col gap-3">
+        <h2 className="text-3xl font-bold tracking-tight text-fg">{exercise.name}</h2>
+        <div className="flex flex-wrap gap-2">
+          {exercise.target ? (
+            <Chip icon={<TargetIcon className="h-4 w-4" />}>{exercise.target}</Chip>
+          ) : (
+            <p className="text-sm text-muted/70">Sin objetivo definido</p>
+          )}
+          {exercise.muscleGroup && <Chip tone="neutral">{muscleGroupLabel(exercise.muscleGroup)}</Chip>}
+        </div>
       </header>
 
       {status === 'loading' && <Spinner />}
@@ -57,7 +61,7 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
             )}
           </section>
 
-          <Card className="flex flex-col gap-4">
+          <Card className="flex flex-col gap-4 border-brand/30">
             <SectionLabel>Nueva serie</SectionLabel>
             <SetForm prefill={pickPrefill(todaySets, reference?.sets ?? [])} onAdd={addSet} />
           </Card>
@@ -86,9 +90,9 @@ function ReferencePanel({ reference }: { reference: { date: string; sets: Workou
         {[...reference.sets].reverse().map((s) => (
           <span
             key={s.id}
-            className="tabular rounded-lg bg-surface px-2.5 py-1 text-sm text-fg"
+            className="tabular rounded-lg border border-border/50 bg-surface-lowest px-2.5 py-1.5 text-sm text-fg"
           >
-            {formatSet(s)}
+            <SetText set={s} />
           </span>
         ))}
       </div>
@@ -100,17 +104,34 @@ function SetRow({ index, set }: { index: number; set: WorkoutSet }) {
   const pending = set.id.startsWith('temp-');
   return (
     <li
-      className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3
+      className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3
         ${pending ? 'opacity-60' : ''}`}
     >
       <span
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-soft
-          text-sm font-semibold text-brand"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft
+          text-sm font-bold text-brand tabular"
       >
         {index}
       </span>
-      <span className="tabular text-base font-semibold text-fg">{formatSet(set)}</span>
+      <span className="tabular flex-1 text-base font-semibold text-fg">
+        <SetText set={set} />
+      </span>
+      {pending ? (
+        <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-border border-t-brand" />
+      ) : (
+        <CheckCircleIcon className="h-5 w-5 shrink-0 text-brand" />
+      )}
     </li>
+  );
+}
+
+// Renderiza la serie con el RIR en acento cálido para que destaque del peso/reps.
+function SetText({ set }: { set: WorkoutSet }) {
+  return (
+    <>
+      {set.weight} kg × {set.reps}
+      {set.rir != null && <span className="ml-1.5 font-medium text-accent">— RIR {set.rir}</span>}
+    </>
   );
 }
 
@@ -196,11 +217,6 @@ function pickPrefill(
     reps: String(base.reps),
     rir: base.rir == null ? '' : String(base.rir),
   };
-}
-
-function formatSet(s: WorkoutSet): string {
-  const rir = s.rir == null ? '' : ` · RIR ${s.rir}`;
-  return `${s.weight} kg × ${s.reps}${rir}`;
 }
 
 function formatDate(iso: string): string {

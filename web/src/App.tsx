@@ -33,7 +33,7 @@ export default function App() {
             </IconButton>
           )}
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight">gymlog</h1>
+            <h1 className="text-xl font-bold tracking-tight text-brand">gymlog</h1>
             <p className="text-xs text-muted">
               {view.name === 'list' ? 'Tus ejercicios' : 'Registrar entrenamiento'}
             </p>

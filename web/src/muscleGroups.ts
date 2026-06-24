@@ -6,6 +6,7 @@ export const MUSCLE_GROUPS = [
   { key: 'hombro', label: 'Hombro' },
   { key: 'biceps', label: 'Bíceps' },
   { key: 'triceps', label: 'Tríceps' },
+  { key: 'antebrazo', label: 'Antebrazo' },
   { key: 'trapecio', label: 'Trapecio' },
   { key: 'piernas', label: 'Piernas' },
 ] as const;

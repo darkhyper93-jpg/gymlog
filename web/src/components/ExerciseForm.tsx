@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Button, Select, TextInput } from './ui';
+import { Button, TextInput } from './ui';
 import { MUSCLE_GROUPS } from '../muscleGroups';
 
 // Formulario reusado para crear y editar. onSubmit hace el await; el form maneja su propio
@@ -46,34 +46,56 @@ export function ExerciseForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <TextInput
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Nombre del ejercicio"
-        aria-label="Nombre del ejercicio"
-        autoFocus={!!initial}
-      />
-      <Select
-        label="Grupo muscular"
-        value={muscleGroup}
-        onChange={(e) => setMuscleGroup(e.target.value)}
-        aria-label="Grupo muscular"
-      >
-        <option value="" disabled>
-          Elegí una sección…
-        </option>
-        {MUSCLE_GROUPS.map((g) => (
-          <option key={g.key} value={g.key}>
-            {g.label}
-          </option>
-        ))}
-      </Select>
-      <TextInput
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        placeholder="Objetivo (ej. 4x8-10 RIR2)"
-        aria-label="Objetivo"
-      />
+      <label className="flex flex-col gap-1.5">
+        <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-muted">Nombre</span>
+        <TextInput
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ej. Press banca"
+          aria-label="Nombre del ejercicio"
+          autoFocus={!!initial}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-muted">
+          Objetivo (opcional)
+        </span>
+        <TextInput
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          placeholder="Ej. 4x8-10 RIR2"
+          aria-label="Objetivo"
+        />
+      </label>
+
+      {/* Grupo muscular como grilla de pills (radio): más rápido de tocar en el celu que un select. */}
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 ml-1 text-xs font-semibold uppercase tracking-wide text-muted">
+          Grupo muscular
+        </legend>
+        <div className="grid grid-cols-2 gap-2">
+          {MUSCLE_GROUPS.map((g) => (
+            <label
+              key={g.key}
+              className="flex cursor-pointer items-center justify-center rounded-lg border border-border
+                bg-surface-lowest px-3 py-3 text-sm font-medium text-fg transition-all
+                hover:border-brand has-[:checked]:border-brand has-[:checked]:bg-brand/10
+                has-[:checked]:text-brand"
+            >
+              <input
+                type="radio"
+                name="muscleGroup"
+                value={g.key}
+                checked={muscleGroup === g.key}
+                onChange={(e) => setMuscleGroup(e.target.value)}
+                className="sr-only"
+              />
+              {g.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" disabled={!canSubmit} className="flex-1">
