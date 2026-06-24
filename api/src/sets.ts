@@ -2,12 +2,18 @@ import { Router } from 'express';
 import { prisma } from './db';
 import { getUserId } from './auth';
 import { HttpError, ok } from './http';
+import { computeStats, unlockNewAchievements } from './achievements';
 
 export const setsRouter = Router();
 
 type CreateSetBody = { exerciseId: string; weight: number; reps: number; rir?: number };
 
-// Valida el body de una serie. Tira HttpError 400 si el input externo no cierra.
+// DECISIÓN: Epley — la fórmula de 1RM más difundida, sin tablas de lookup.
+// Se usa tanto para detectar PRs al crear una serie como para calcular progreso en el frontend.
+function est1RM(weight: number, reps: number): number {
+  return weight * (1 + reps / 30);
+}
+
 function parseCreateSet(body: unknown): CreateSetBody {
   const b = (body ?? {}) as Record<string, unknown>;
 
@@ -34,13 +40,30 @@ function parseCreateSet(body: unknown): CreateSetBody {
   };
 }
 
-// POST /sets — registra una serie en un ejercicio TUYO { exerciseId, weight, reps, rir }
+// POST /sets — registra una serie y detecta PRs de peso y 1RM estimado.
+// Responde { set, prs: { weightPR, oneRmPR }, achievements: [] } (achievements lo llena Etapa 5).
 setsRouter.post('/', async (req, res) => {
   const userId = getUserId(req);
   const data = parseCreateSet(req.body);
-  // El ejercicio tiene que existir y ser tuyo; si no, 404 (no se filtra que existe de otro).
+
   const exercise = await prisma.exercise.findFirst({ where: { id: data.exerciseId, userId } });
   if (!exercise) throw new HttpError(404, 'Ejercicio no encontrado');
+
+  // Récords anteriores — calcular ANTES de insertar la nueva serie.
+  const prevSets = await prisma.workoutSet.findMany({ where: { exerciseId: data.exerciseId } });
+  const prevMaxWeight = prevSets.length > 0 ? Math.max(...prevSets.map((s) => s.weight)) : null;
+  const prevBest1RM =
+    prevSets.length > 0 ? Math.max(...prevSets.map((s) => est1RM(s.weight, s.reps))) : null;
+
   const set = await prisma.workoutSet.create({ data });
-  ok(res, set, 201);
+
+  const weightPR = prevMaxWeight === null || set.weight > prevMaxWeight;
+  const oneRmPR = prevBest1RM === null || est1RM(set.weight, set.reps) > prevBest1RM;
+  const hasPR = weightPR || oneRmPR;
+
+  // Calcular stats y desbloquear logros nuevos tras insertar la serie.
+  const stats = await computeStats(userId, hasPR);
+  const achievements = await unlockNewAchievements(userId, stats);
+
+  ok(res, { set, prs: { weightPR, oneRmPR }, achievements }, 201);
 });

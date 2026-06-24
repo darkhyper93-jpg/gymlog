@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { WorkoutSet } from '../types';
+import type { Achievement, WorkoutSet } from '../types';
 import { getExerciseSets } from '../api/exercises';
 import { createSet } from '../api/sets';
 
@@ -10,7 +10,7 @@ export type DaySession = { dayKey: string; date: string; sets: WorkoutSet[] };
 // Clave de día en horario local (no UTC) para agrupar series por sesión.
 // DECISIÓN: agrupamos por día local porque entrenar es un evento local; usar UTC
 // partiría una sesión nocturna en dos días.
-function localDayKey(iso: string): string {
+export function localDayKey(iso: string): string {
   const d = new Date(iso);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -67,8 +67,13 @@ export function useRegister(exerciseId: string) {
 
   // Alta optimista: muestro la serie al toque y la confirmo con el server;
   // si falla, hago rollback y propago el error para que el form lo muestre.
+  // Retorna los flags de PR y los logros recién desbloqueados.
   const addSet = useCallback(
-    async (input: { weight: number; reps: number; rir?: number }) => {
+    async (input: {
+      weight: number;
+      reps: number;
+      rir?: number;
+    }): Promise<{ weightPR: boolean; oneRmPR: boolean; achievements: Achievement[] }> => {
       const temp: WorkoutSet = {
         id: `temp-${Date.now()}`,
         exerciseId,
@@ -80,8 +85,9 @@ export function useRegister(exerciseId: string) {
       };
       setTodaySets((prev) => [...prev, temp]);
       try {
-        const created = await createSet({ exerciseId, ...input });
+        const { set: created, prs, achievements } = await createSet({ exerciseId, ...input });
         setTodaySets((prev) => prev.map((s) => (s.id === temp.id ? created : s)));
+        return { ...prs, achievements };
       } catch (e) {
         setTodaySets((prev) => prev.filter((s) => s.id !== temp.id));
         throw e;

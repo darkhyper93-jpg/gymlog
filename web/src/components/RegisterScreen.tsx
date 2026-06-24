@@ -1,15 +1,38 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
 import { AlertTriangleIcon, CheckCircleIcon, PlusIcon, TargetIcon } from './icons';
+import { RestTimer } from './RestTimer';
+import { Toast } from './Toast';
 
 // Pantalla "registrar hoy": el corazón del V1. Muestra objetivo + última vez para superar,
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
 export function RegisterScreen({ exercise }: { exercise: Exercise }) {
   const { status, error, todaySets, reference, reload, addSet } = useRegister(exercise.id);
+  const [timerSecs, setTimerSecs] = useState<number | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Arranca el timer, muestra toast de logro o PR tras cargar una serie exitosamente.
+  const handleAddSet = useCallback(
+    async (input: { weight: number; reps: number; rir?: number }) => {
+      const { weightPR, oneRmPR, achievements } = await addSet(input);
+      if (exercise.restSeconds != null && exercise.restSeconds > 0) {
+        setTimerSecs(exercise.restSeconds);
+      }
+      // Prioridad: logro nuevo > PR de 1RM > PR de peso.
+      if (achievements.length > 0) {
+        setToast(`Logro: ${achievements[0].title}`);
+      } else if (oneRmPR) {
+        setToast('¡Nuevo récord de 1RM estimado!');
+      } else if (weightPR) {
+        setToast('¡Nuevo récord de peso!');
+      }
+    },
+    [addSet, exercise.restSeconds],
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,10 +86,14 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
 
           <Card className="flex flex-col gap-4 border-brand/30">
             <SectionLabel>Nueva serie</SectionLabel>
-            <SetForm prefill={pickPrefill(todaySets, reference?.sets ?? [])} onAdd={addSet} />
+            <SetForm prefill={pickPrefill(todaySets, reference?.sets ?? [])} onAdd={handleAddSet} />
           </Card>
         </>
       )}
+      {timerSecs !== null && (
+        <RestTimer initialSeconds={timerSecs} onClose={() => setTimerSecs(null)} />
+      )}
+      {toast !== null && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
   );
 }

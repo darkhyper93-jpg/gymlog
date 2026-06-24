@@ -67,6 +67,13 @@ Queda FUERA del V1 (postre, para más adelante):
 · Gamificación.
 · Compartir con otra persona / multiusuario completo.
 
+Post-V1 — V2 (rama v2-postre, 2026-06-24):
+· [x] Rutinas personalizadas con sub-días: Routine → RoutineDay → ejercicios ordenados.
+· [x] Timer de descanso por ejercicio: Exercise.restSeconds, timer SVG en RegisterScreen.
+· [x] Gráficos de progreso: SVG sin dependencias, 3 métricas (Top set / Volumen / 1RM est.).
+· [x] PRs auto-detectados + toast de celebración: peso máximo y 1RM Epley en POST /sets.
+· [x] Logros: 10 logros estáticos evaluados server-side, desbloqueados al cargar series.
+
 
 ══════════════════════════════════════════════════════════════════════════════
 5. STACK (CON QUÉ ESTÁ HECHA)
@@ -105,22 +112,21 @@ Convención de respuestas de la API: todas devuelven un "envelope" uniforme,
 6. MODELO DE DATOS (LAS TABLAS)
 ══════════════════════════════════════════════════════════════════════════════
 
-Definido en api/prisma/schema.prisma. Son dos tablas:
+Definido en api/prisma/schema.prisma.
 
 Exercise (un ejercicio)
 · id          — identificador único (cuid, generado solo)
 · name        — nombre del ejercicio
 · target      — objetivo en texto, opcional (ej. "4x8-10 RIR2")
-· muscleGroup — grupo muscular para agrupar en secciones, opcional en la base pero
-                obligatorio al crear desde la app. Valores: espalda, hombro, pecho,
-                piernas, triceps, biceps, trapecio (lista fija validada en el backend;
-                String? porque SQLite no soporta enums en Prisma).
+· muscleGroup — grupo muscular para agrupar en secciones (String?, validado en backend).
+· restSeconds — segundos de descanso objetivo para el timer; null = sin preferencia. [V2]
 · createdAt   — fecha de creación
-· sets        — relación: todas las series hechas de este ejercicio
+· sets        — relación: series hechas
+· routineItems — relación: apariciones en días de rutina [V2]
 
 WorkoutSet (una serie concreta hecha)
 · id         — identificador único
-· exerciseId — a qué ejercicio pertenece (relación con Exercise)
+· exerciseId — a qué ejercicio pertenece
 · date       — cuándo se hizo
 · weight     — peso (número con decimales)
 · reps       — repeticiones (entero)
@@ -130,14 +136,27 @@ WorkoutSet (una serie concreta hecha)
 User (para el login)
 · id           — identificador único (cuid)
 · username     — usuario, único
-· passwordHash — contraseña hasheada con bcrypt (NUNCA se guarda en texto plano)
+· passwordHash — contraseña hasheada con bcrypt
 · createdAt    — fecha de creación
 
-Regla: si se borra un ejercicio, se borran solas sus series (onDelete: Cascade).
+Routine (rutina personalizada) [V2]
+· id, name, userId, order, createdAt
+· days — lista de RoutineDay (ordenados por order)
 
-Cada Exercise tiene userId (su dueño): cada usuario ve y maneja SOLO sus ejercicios, y las
-series quedan separadas por usuario de forma transitiva (cuelgan del ejercicio). Si se borra
-un usuario, se borran sus ejercicios (y series) por cascade.
+RoutineDay (día dentro de una rutina) [V2]
+· id, name, routineId, order
+· exercises — lista de RoutineDayExercise (ordenados por order)
+
+RoutineDayExercise (ejercicio asignado a un día de rutina) [V2]
+· id, routineDayId, exerciseId, order
+· exercise — Exercise embebido (include del backend)
+
+UserAchievement (logro desbloqueado) [V2]
+· id, userId, key (clave del logro estático en achievements.ts), unlockedAt
+· @@unique([userId, key]) — no se pueden duplicar logros
+
+Regla: cascades transitivos — borrar User elimina todo lo suyo. Aislamiento estricto por
+userId en todos los endpoints.
 
 
 ══════════════════════════════════════════════════════════════════════════════
@@ -147,18 +166,31 @@ un usuario, se borran sus ejercicios (y series) por cascade.
 Ya implementados (probados de punta a punta):
 · GET    /health               — chequeo de que el server está vivo
 · GET    /exercises            — lista todos los ejercicios (más nuevo primero)
-· POST   /exercises            — crea un ejercicio { name, target?, muscleGroup }
-· PATCH  /exercises/:id        — edita nombre, objetivo o grupo de un ejercicio
+· POST   /exercises            — crea un ejercicio { name, target?, muscleGroup, restSeconds? }
+· PATCH  /exercises/:id        — edita nombre, objetivo, grupo o restSeconds de un ejercicio
 · DELETE /exercises/:id        — borra un ejercicio (y sus series, por cascade)
-· POST   /sets                 — registra una serie { exerciseId, weight, reps, rir }
-· GET    /exercises/:id/last   — devuelve la última sesión de un ejercicio (para saber qué superar)
+· POST   /sets                 — registra una serie; devuelve { set, prs, achievements } [V2]
+· GET    /exercises/:id/last   — devuelve la última sesión de un ejercicio
 · GET    /exercises/:id/sets   — historial de series de un ejercicio
 
 Login (tabla User + bcrypt + JWT, sin refresh tokens):
 · POST   /auth/register        — crea usuario { username, password } y devuelve { token }
 · POST   /auth/login           — valida { username, password } y devuelve { token }
-  Las rutas /exercises y /sets exigen el header Authorization: Bearer <token> (requireAuth);
-  sin token o con token inválido responden 401.
+
+Rutinas [V2]:
+· GET    /routines             — tus rutinas con días y ejercicios anidados
+· POST   /routines             — crea rutina { name }
+· PATCH  /routines/:id         — renombra/reordena { name?, order? }
+· DELETE /routines/:id         — borra rutina (cascade)
+· POST   /routines/:id/days    — agrega día { name }
+· PATCH  /routine-days/:dayId  — renombra/reordena día
+· DELETE /routine-days/:dayId  — borra día
+· POST   /routine-days/:dayId/exercises    — agrega ejercicio al día { exerciseId }
+· PATCH  /routine-day-exercises/:itemId    — reordena item { order }
+· DELETE /routine-day-exercises/:itemId    — quita ejercicio del día
+
+Logros [V2]:
+· GET    /achievements         — todas las defs + estado desbloqueado del usuario
 
 Todos validan el input externo y devuelven el envelope { success, data } (o
 { success: false, error } con el status correcto, vía handler de error central).
@@ -227,8 +259,14 @@ Hecho:
 · [x] Deploy: backend y frontend en Render, base en Supabase/Postgres. Verificado de punta a
       punta desde el celu (2026-06-23). UptimeRobot mantiene la API despierta.
 
-V1 COMPLETO. Lo que sigue es post-V1 (ver "postre" en la sección 4): nada se implementa sin
-encuadrarlo antes en este documento.
+· [x] V2 — Rutinas personalizadas con sub-días (Routine / RoutineDay / RoutineDayExercise).
+· [x] V2 — Timer de descanso SVG (Exercise.restSeconds, arranca al cargar serie).
+· [x] V2 — Gráficos de progreso SVG (Top set / Volumen / 1RM estimado por día, en ProgressScreen).
+· [x] V2 — PRs auto-detectados: peso máximo y 1RM Epley, toast de celebración en RegisterScreen.
+· [x] V2 — Logros: 10 logros estáticos evaluados en POST /sets, pantalla AchievementsScreen.
+· [x] V2 — Navegación de 4 tabs (Ejercicios / Rutinas / Progreso / Logros), bottom-nav mobile.
+
+V2 COMPLETO (rama v2-postre, 2026-06-24). Pendiente: merge a main + deploy manual en Render.
 
 
 ══════════════════════════════════════════════════════════════════════════════
@@ -285,6 +323,29 @@ encuadrarlo antes en este documento.
   WorkoutSet no tiene userId propio: su dueño es el del ejercicio (POST /sets valida que el
   ejercicio sea tuyo). Antes esto era single-user (datos compartidos); se cambió a multiusuario
   real a pedido para que cada cuenta tenga su propio registro.
+· [V2] Rutinas con sub-días: Routine → RoutineDay → RoutineDayExercise. El aislamiento es
+  transitivo: RoutineDay se verifica comprobando que su rutina sea del usuario (join); igual
+  RoutineDayExercise. Ordenamiento manual con campo order (entero); reordenar = PATCH en orden,
+  sin drag&drop (mobile-first con botones ↑/↓).
+· [V2] Timer de descanso: Exercise.restSeconds (Int?) guarda el objetivo de descanso del
+  ejercicio. Al cargar una serie exitosa en RegisterScreen, el timer RestTimer arranca solo con
+  ese valor. Timer SVG (anillo de progreso) sin dependencias externas, con controles grandes
+  (play/pausa, reset, ±15s, presets).
+· [V2] PRs auto-detectados en POST /sets: antes de insertar la serie se calculan maxWeight y
+  best1RM (Epley: weight*(1+reps/30)) del historial previo; tras insertar se comparan y se
+  devuelve { set, prs: { weightPR, oneRmPR }, achievements }. El frontend muestra un toast.
+· [V2] Logros: definiciones estáticas en api/src/achievements.ts (10 logros: first-workout,
+  workouts-N, streak-N, volume-Nk, first-pr). Motor evaluate(stats) server-side. POST /sets
+  desbloquea logros nuevos y los devuelve en el payload. GET /achievements devuelve todas las
+  defs + estado desbloqueado. AchievementsScreen muestra grilla con tarjetas desbloqueadas
+  (realzadas) y bloqueadas (atenuadas con candado).
+· [V2] Navegación de 4 tabs sin router (mismo patrón que V1): estado tab + subView en App.tsx.
+  NavBar (bottom en mobile, top en desktop), icono+label, activo en text-brand. Registro sigue
+  siendo sub-vista que se abre al tocar ejercicio (desde Ejercicios o desde un día de rutina).
+· [V2] Gráficos de progreso: ProgressChart SVG sin librerías externas. Agrupa series por día
+  local (reutiliza localDayKey de useRegister). 3 métricas: Top set (peso máximo del día),
+  Volumen (Σ weight×reps), 1RM estimado (máximo del día). ProgressScreen: selector de
+  ejercicio con búsqueda + detalle con PR cards + toggle de métrica + gráfico.
 
 
 ══════════════════════════════════════════════════════════════════════════════

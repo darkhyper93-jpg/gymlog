@@ -17,23 +17,37 @@ model Exercise {
   // Grupo muscular para organizar los ejercicios en secciones (espalda, pecho, etc.).
   // String? (no enum) porque SQLite no soporta enums en Prisma; se valida en el backend.
   // Nullable para no romper los ejercicios ya cargados antes de sumar este campo.
-  muscleGroup String?
+  muscleGroup  String?
+  // Segundos de descanso objetivo para el timer entre series. Null = sin preferencia.
+  restSeconds  Int?
   // Dueño del ejercicio: cada usuario ve y maneja SOLO los suyos. Las series cuelgan del
   // ejercicio, así que quedan separadas por usuario de forma transitiva.
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
   createdAt   DateTime @default(now())
   sets        WorkoutSet[]
+  routineItems RoutineDayExercise[]
 }
 
-// Usuario para el login. Para V1 (un solo usuario) no se vincula a Exercise/WorkoutSet:
-// el login solo protege las rutas, no separa datos por usuario.
 model User {
   id           String   @id @default(cuid())
   username     String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
   exercises    Exercise[]
+  routines     Routine[]
+  achievements UserAchievement[]
+}
+
+model UserAchievement {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  // Clave de la definición estática en api/src/achievements.ts
+  key        String
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, key])
 }
 
 model WorkoutSet {
@@ -45,4 +59,32 @@ model WorkoutSet {
   reps       Int
   rir        Int?
   createdAt  DateTime @default(now())
+}
+
+model Routine {
+  id        String       @id @default(cuid())
+  name      String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  order     Int          @default(0)
+  createdAt DateTime     @default(now())
+  days      RoutineDay[]
+}
+
+model RoutineDay {
+  id        String               @id @default(cuid())
+  name      String
+  routine   Routine              @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routineId String
+  order     Int                  @default(0)
+  exercises RoutineDayExercise[]
+}
+
+model RoutineDayExercise {
+  id           String     @id @default(cuid())
+  day          RoutineDay @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  routineDayId String
+  exercise     Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  order        Int        @default(0)
 }

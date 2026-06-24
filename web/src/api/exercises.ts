@@ -9,13 +9,14 @@ export function createExercise(input: {
   name: string;
   target?: string;
   muscleGroup: string;
+  restSeconds?: number | null;
 }): Promise<Exercise> {
   return apiRequest<Exercise>('/exercises', { method: 'POST', body: input });
 }
 
 export function updateExercise(
   id: string,
-  input: { name?: string; target?: string; muscleGroup?: string },
+  input: { name?: string; target?: string; muscleGroup?: string; restSeconds?: number | null },
 ): Promise<Exercise> {
   return apiRequest<Exercise>(`/exercises/${id}`, { method: 'PATCH', body: input });
 }

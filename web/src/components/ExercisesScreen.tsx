@@ -127,7 +127,7 @@ function ExerciseCard({
   onSelect,
 }: {
   exercise: Exercise;
-  onEdit: (id: string, input: { name?: string; target?: string; muscleGroup?: string }) => Promise<void>;
+  onEdit: (id: string, input: { name?: string; target?: string; muscleGroup?: string; restSeconds?: number | null }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onSelect: (exercise: Exercise) => void;
 }) {
@@ -186,6 +186,7 @@ function ExerciseCard({
               name: exercise.name,
               target: exercise.target ?? '',
               muscleGroup: exercise.muscleGroup ?? '',
+              restSeconds: exercise.restSeconds,
             }}
             submitLabel="Guardar"
             onSubmit={async (input) => {

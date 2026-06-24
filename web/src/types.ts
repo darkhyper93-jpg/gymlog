@@ -5,6 +5,7 @@ export type Exercise = {
   name: string;
   target: string | null;
   muscleGroup: string | null; // clave de grupo muscular; null en ejercicios viejos
+  restSeconds: number | null; // segundos de descanso objetivo para el timer; null = sin preferencia
   createdAt: string; // ISO date string
 };
 
@@ -23,3 +24,41 @@ export type LastSession = {
   date: string;
   sets: WorkoutSet[];
 } | null;
+
+// ─── Rutinas ─────────────────────────────────────────────────────────────────
+
+export type RoutineDayExercise = {
+  id: string;
+  routineDayId: string;
+  exerciseId: string;
+  order: number;
+  exercise: Exercise; // Exercise embebido (include del backend)
+};
+
+export type RoutineDay = {
+  id: string;
+  routineId: string;
+  name: string;
+  order: number;
+  exercises: RoutineDayExercise[];
+};
+
+export type Routine = {
+  id: string;
+  name: string;
+  userId: string;
+  order: number;
+  createdAt: string;
+  days: RoutineDay[];
+};
+
+// ─── Logros ───────────────────────────────────────────────────────────────────
+
+export type Achievement = {
+  key: string;
+  title: string;
+  description: string;
+  icon: string; // nombre del icono (mapeado a SVG en el frontend)
+  unlocked: boolean;
+  unlockedAt: string | null; // ISO date string
+};

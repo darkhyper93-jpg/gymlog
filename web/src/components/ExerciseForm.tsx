@@ -11,14 +11,17 @@ export function ExerciseForm({
   onSubmit,
   onCancel,
 }: {
-  initial?: { name: string; target: string; muscleGroup: string };
+  initial?: { name: string; target: string; muscleGroup: string; restSeconds?: number | null };
   submitLabel: string;
-  onSubmit: (input: { name: string; target?: string; muscleGroup: string }) => Promise<void>;
+  onSubmit: (input: { name: string; target?: string; muscleGroup: string; restSeconds?: number | null }) => Promise<void>;
   onCancel?: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [target, setTarget] = useState(initial?.target ?? '');
   const [muscleGroup, setMuscleGroup] = useState(initial?.muscleGroup ?? '');
+  const [restSeconds, setRestSeconds] = useState(
+    initial?.restSeconds != null ? String(initial.restSeconds) : '',
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,12 +33,19 @@ export function ExerciseForm({
     setSaving(true);
     setError(null);
     try {
-      await onSubmit({ name: name.trim(), target: target.trim() || undefined, muscleGroup });
+      const parsedRest = restSeconds.trim() !== '' ? parseInt(restSeconds, 10) : null;
+      await onSubmit({
+        name: name.trim(),
+        target: target.trim() || undefined,
+        muscleGroup,
+        restSeconds: parsedRest,
+      });
       if (!initial) {
         // Modo "crear": limpiar para cargar el siguiente rápido.
         setName('');
         setTarget('');
         setMuscleGroup('');
+        setRestSeconds('');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar');
@@ -66,6 +76,19 @@ export function ExerciseForm({
           onChange={(e) => setTarget(e.target.value)}
           placeholder="Ej. 4x8-10 RIR2"
           aria-label="Objetivo"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-muted">
+          Descanso (seg) — opcional
+        </span>
+        <TextInput
+          value={restSeconds}
+          onChange={(e) => setRestSeconds(e.target.value)}
+          placeholder="ej. 90"
+          inputMode="numeric"
+          aria-label="Segundos de descanso entre series"
         />
       </label>
 

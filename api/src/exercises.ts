@@ -23,8 +23,8 @@ function isMuscleGroup(value: unknown): value is MuscleGroup {
   return typeof value === 'string' && (MUSCLE_GROUPS as readonly string[]).includes(value);
 }
 
-type CreateExerciseBody = { name: string; target?: string; muscleGroup: MuscleGroup };
-type UpdateExerciseBody = { name?: string; target?: string; muscleGroup?: MuscleGroup };
+type CreateExerciseBody = { name: string; target?: string; muscleGroup: MuscleGroup; restSeconds?: number };
+type UpdateExerciseBody = { name?: string; target?: string; muscleGroup?: MuscleGroup; restSeconds?: number | null };
 
 // Valida el body de creación. Tira HttpError 400 si el input externo no cierra.
 function parseCreateBody(body: unknown): CreateExerciseBody {
@@ -38,11 +38,18 @@ function parseCreateBody(body: unknown): CreateExerciseBody {
   if (!isMuscleGroup(b.muscleGroup)) {
     throw new HttpError(400, `muscleGroup es requerido y debe ser uno de: ${MUSCLE_GROUPS.join(', ')}`);
   }
-  return {
+  const result: CreateExerciseBody = {
     name: b.name.trim(),
     target: typeof b.target === 'string' && b.target.trim() !== '' ? b.target.trim() : undefined,
     muscleGroup: b.muscleGroup,
   };
+  if (b.restSeconds !== undefined && b.restSeconds !== null) {
+    if (typeof b.restSeconds !== 'number' || !Number.isInteger(b.restSeconds) || b.restSeconds < 0) {
+      throw new HttpError(400, 'restSeconds debe ser un entero ≥ 0');
+    }
+    result.restSeconds = b.restSeconds;
+  }
+  return result;
 }
 
 // Valida el body de edición: al menos un campo, y los tipos correctos.
@@ -68,13 +75,23 @@ function parseUpdateBody(body: unknown): UpdateExerciseBody {
     }
     data.muscleGroup = b.muscleGroup;
   }
+  if (b.restSeconds !== undefined) {
+    if (b.restSeconds === null) {
+      data.restSeconds = null;
+    } else if (typeof b.restSeconds !== 'number' || !Number.isInteger(b.restSeconds) || b.restSeconds < 0) {
+      throw new HttpError(400, 'restSeconds debe ser un entero ≥ 0');
+    } else {
+      data.restSeconds = b.restSeconds;
+    }
+  }
   if (
     data.name === undefined &&
     data.target === undefined &&
     b.target === undefined &&
-    data.muscleGroup === undefined
+    data.muscleGroup === undefined &&
+    b.restSeconds === undefined
   ) {
-    throw new HttpError(400, 'Hay que enviar al menos un campo a editar (name, target o muscleGroup)');
+    throw new HttpError(400, 'Hay que enviar al menos un campo a editar (name, target, muscleGroup o restSeconds)');
   }
   return data;
 }

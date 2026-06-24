@@ -5,6 +5,8 @@ import cors from 'cors';
 import { exercisesRouter } from './exercises';
 import { setsRouter } from './sets';
 import { authRouter, requireAuth } from './auth';
+import { routinesRouter, routineDaysRouter, routineDayExercisesRouter } from './routines';
+import { achievementsRouter } from './achievements';
 import { HttpError } from './http';
 
 const app = express();
@@ -26,6 +28,10 @@ app.use('/auth', authRouter);
 // Rutas de datos protegidas: exigen Authorization: Bearer <token> (requireAuth).
 app.use('/exercises', requireAuth, exercisesRouter);
 app.use('/sets', requireAuth, setsRouter);
+app.use('/routines', requireAuth, routinesRouter);
+app.use('/routine-days', requireAuth, routineDaysRouter);
+app.use('/routine-day-exercises', requireAuth, routineDayExercisesRouter);
+app.use('/achievements', requireAuth, achievementsRouter);
 
 // Handler de error central: arma el envelope { success: false, error } con el status correcto.
 // Express 5 propaga el rechazo de las promesas async hasta acá, así que los handlers solo
