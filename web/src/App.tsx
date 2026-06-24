@@ -47,23 +47,25 @@ export default function App() {
 
   return (
     <div className="flex min-h-full w-full flex-col">
-      {/* Header fijo: wordmark + top nav en desktop + logout */}
+      {/* Header fijo: wordmark + top nav en desktop + logout.
+          DECISIÓN: el header siempre usa max-w-4xl en desktop, independiente del wideClass
+          del contenido. La top-nav tiene 4 tabs con texto y no entra en max-w-md. */}
       <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur">
-        <div className={`mx-auto flex w-full items-center gap-2 px-4 py-3 ${wideClass}`}>
+        <div className="mx-auto flex w-full items-center gap-3 px-4 py-3 md:max-w-4xl">
           {isRegister && (
             <IconButton aria-label="Volver" onClick={() => setSubView(null)}>
               <ChevronLeftIcon className="h-5 w-5" />
             </IconButton>
           )}
-          <div className="min-w-0">
+          <div className="shrink-0">
             <h1 className="text-xl font-bold tracking-tight text-brand">gymlog</h1>
-            <p className="text-xs text-muted">
+            <p className="whitespace-nowrap text-xs text-muted">
               {isRegister ? 'Registrar entrenamiento' : TAB_LABELS[tab]}
             </p>
           </div>
           {/* Top nav solo en desktop y fuera de la sub-vista register */}
           {!isRegister && (
-            <div className="ml-4 mr-auto">
+            <div className="hidden md:flex ml-6 mr-auto">
               <TopNav tab={tab} onChange={handleTabChange} />
             </div>
           )}
