@@ -221,9 +221,14 @@ Hecho:
       secciones por grupo (1 columna en celular, 2 en pantalla ancha).
 · [x] Login (tabla User + bcrypt + JWT): register/login, rutas /exercises y /sets protegidas,
       frontend con pantalla de login, token persistido, logout y vuelta al login ante un 401.
+· [x] Datos separados por usuario (Exercise.userId; todos los endpoints filtran por el token).
+· [x] Rediseño visual V2 (UI generada con Stitch y portada al stack): login con tabs, cards con
+      hover, modales, RIR en acento, grilla por grupo muscular. Grupo "antebrazo" agregado.
+· [x] Deploy: backend y frontend en Render, base en Supabase/Postgres. Verificado de punta a
+      punta desde el celu (2026-06-23). UptimeRobot mantiene la API despierta.
 
-En progreso / falta:
-· [ ] Deploy (backend y frontend en Render, base en Supabase/Postgres) para usarlo desde el celu.
+V1 COMPLETO. Lo que sigue es post-V1 (ver "postre" en la sección 4): nada se implementa sin
+encuadrarlo antes en este documento.
 
 
 ══════════════════════════════════════════════════════════════════════════════
