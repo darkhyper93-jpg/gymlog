@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Achievement, WorkoutSet } from '../types';
 import { getExerciseSets } from '../api/exercises';
-import { createSet, deleteSet } from '../api/sets';
+import { createSet, deleteSet, updateSet } from '../api/sets';
+import type { UpdateSetInput } from '../api/sets';
 
 type Status = 'loading' | 'error' | 'ready';
 
@@ -113,5 +114,32 @@ export function useRegister(exerciseId: string) {
     [todaySets],
   );
 
-  return { status, error, todaySets, reference, reload: load, addSet, removeSet };
+  // Edita una serie ya confirmada. Optimista: actualiza el estado al toque y rollback si falla.
+  const editSet = useCallback(
+    async (id: string, input: UpdateSetInput): Promise<void> => {
+      const prev = todaySets;
+      setTodaySets((current) =>
+        current.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                weight: input.weight ?? s.weight,
+                reps: input.reps ?? s.reps,
+                rir: input.rir !== undefined ? input.rir : s.rir,
+              }
+            : s,
+        ),
+      );
+      try {
+        const updated = await updateSet(id, input);
+        setTodaySets((current) => current.map((s) => (s.id === id ? updated : s)));
+      } catch (e) {
+        setTodaySets(prev);
+        throw e;
+      }
+    },
+    [todaySets],
+  );
+
+  return { status, error, todaySets, reference, reload: load, addSet, removeSet, editSet };
 }

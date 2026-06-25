@@ -4,14 +4,14 @@ import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
-import { AlertTriangleIcon, CheckCircleIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
+import { AlertTriangleIcon, CheckCircleIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
 import { RestTimer } from './RestTimer';
 import { Toast } from './Toast';
 
 // Pantalla "registrar hoy": el corazón del V1. Muestra objetivo + última vez para superar,
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
 export function RegisterScreen({ exercise }: { exercise: Exercise }) {
-  const { status, error, todaySets, reference, reload, addSet, removeSet } = useRegister(exercise.id);
+  const { status, error, todaySets, reference, reload, addSet, removeSet, editSet } = useRegister(exercise.id);
   const [timerSecs, setTimerSecs] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -78,7 +78,7 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
             ) : (
               <ol className="flex flex-col gap-2">
                 {todaySets.map((s, i) => (
-                  <SetRow key={s.id} index={i + 1} set={s} onDelete={removeSet} />
+                  <SetRow key={s.id} index={i + 1} set={s} onDelete={removeSet} onEdit={editSet} />
                 ))}
               </ol>
             )}
@@ -131,13 +131,20 @@ function SetRow({
   index,
   set,
   onDelete,
+  onEdit,
 }: {
   index: number;
   set: WorkoutSet;
   onDelete: (id: string) => Promise<void>;
+  onEdit: (id: string, input: { weight?: number; reps?: number; rir?: number | null }) => Promise<void>;
 }) {
   const pending = set.id.startsWith('temp-');
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editWeight, setEditWeight] = useState(String(set.weight));
+  const [editReps, setEditReps] = useState(String(set.reps));
+  const [editRir, setEditRir] = useState(set.rir == null ? '' : String(set.rir));
 
   async function handleDelete() {
     if (deleting) return;
@@ -149,10 +156,69 @@ function SetRow({
     }
   }
 
+  function startEdit() {
+    setEditWeight(String(set.weight));
+    setEditReps(String(set.reps));
+    setEditRir(set.rir == null ? '' : String(set.rir));
+    setEditing(true);
+  }
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    const w = Number(editWeight);
+    const r = Number(editReps);
+    if (!editWeight || !editReps || !Number.isFinite(w) || w < 0 || !Number.isInteger(r) || r <= 0) return;
+    setSaving(true);
+    try {
+      await onEdit(set.id, {
+        weight: w,
+        reps: r,
+        rir: editRir === '' ? null : Number(editRir),
+      });
+      setEditing(false);
+    } catch {
+      // error queda en el servidor; el optimismo ya hizo rollback en el hook
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const busy = pending || deleting || saving;
+
+  // Modo edición: fila expandida con campos inline
+  if (editing) {
+    return (
+      <li className="flex flex-col gap-3 rounded-xl border border-brand/40 bg-surface px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-bold text-brand tabular">
+            {index}
+          </span>
+          <span className="text-sm font-medium text-muted">Editando serie</span>
+        </div>
+        <form onSubmit={handleSave} className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            <NumberField label="Peso (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} placeholder="0" />
+            <NumberField label="Reps" value={editReps} onChange={(e) => setEditReps(e.target.value)} placeholder="0" />
+            <NumberField label="RIR" value={editRir} onChange={(e) => setEditRir(e.target.value)} placeholder="—" />
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={saving} className="flex-1">
+              {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setEditing(false)} disabled={saving} className="flex-1">
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  // Modo visualización normal
   return (
     <li
       className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3
-        ${pending || deleting ? 'opacity-60' : ''}`}
+        ${busy ? 'opacity-60' : ''}`}
     >
       <span
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft
@@ -163,11 +229,19 @@ function SetRow({
       <span className="tabular flex-1 text-base font-semibold text-fg">
         <SetText set={set} />
       </span>
-      {pending || deleting ? (
+      {busy ? (
         <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-border border-t-brand" />
       ) : (
         <>
           <CheckCircleIcon className="h-5 w-5 shrink-0 text-brand" />
+          <button
+            type="button"
+            onClick={startEdit}
+            aria-label="Editar serie"
+            className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-brand/10 hover:text-brand"
+          >
+            <PencilIcon className="h-4 w-4" />
+          </button>
           <button
             type="button"
             onClick={handleDelete}
