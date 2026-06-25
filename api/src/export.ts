@@ -43,7 +43,10 @@ exportRouter.get('/', async (req, res) => {
 });
 
 function csvCell(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+  // Prevenir CSV formula injection: si la celda arranca con un carácter que las hojas
+  // de cálculo interpretan como fórmula (=, +, -, @, tab, CR), se prefija con comilla simple.
+  if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`;
+  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
