@@ -3,7 +3,7 @@ import webpush from 'web-push';
 import { prisma } from './db';
 import { getUserId, requireAuth } from './auth';
 import { HttpError, ok } from './http';
-import { todayKeyMVD, localDayKeyMVD } from './time';
+import { todayKeyMVD } from './time';
 
 export const pushRouter = Router();
 
@@ -34,24 +34,15 @@ function todayMessage(): string {
   return MESSAGES[(y * 31 + m * 12 + d) % MESSAGES.length];
 }
 
-// Detecta si hoy (hora Uruguay) hay algún día de rutina del usuario que coincida con el
-// weekday actual. Los nombres de los días son libres (Lun, Lunes, Mon, Monday…); buscamos
-// las abreviaciones comunes para ser tolerantes con distintos estilos.
-async function hasTodayRoutine(userId: string): Promise<boolean> {
-  const now = new Date();
-  const weekday = new Intl.DateTimeFormat('es-UY', {
-    timeZone: 'America/Montevideo',
-    weekday: 'short',
-  }).format(now); 
-
-  const abbr = weekday.replace('.', '').toLowerCase(); 
-
-  const days = await prisma.routineDay.findMany({
-    where: { routine: { userId } },
-    select: { name: true },
-  });
-
-  return days.some((d) => d.name.toLowerCase().startsWith(abbr));
+// Notifica si el usuario tiene al menos un día de rutina definido (cualquier nombre).
+// DECISIÓN: antes se exigía que el nombre del día empezara con la abreviatura del weekday
+// (Lun, Mar…), lo que fallaba con días nombrados por contenido ('Pecho', 'Push', 'Día 1') y
+// hacía que la notificación nunca llegara. Como los días se nombran libremente y la rutina es
+// un split (no está mapeada al día de la semana), notificamos a la hora elegida a todo usuario
+// que armó su rutina.
+async function hasAnyRoutine(userId: string): Promise<boolean> {
+  const count = await prisma.routineDay.count({ where: { routine: { userId } } });
+  return count > 0;
 }
 
 // GET /push/subscription — estado actual de la suscripción del usuario.
@@ -123,7 +114,7 @@ pushRouter.post('/send-daily', async (req, res) => {
 
   let sent = 0;
   for (const sub of subs) {
-    const hasRoutine = await hasTodayRoutine(sub.userId);
+    const hasRoutine = await hasAnyRoutine(sub.userId);
     if (!hasRoutine) continue;
 
     try {

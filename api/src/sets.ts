@@ -16,6 +16,16 @@ function est1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
 }
 
+// Recalcula el estado de logros tras editar o borrar una serie (récords/volumen/días/racha).
+// DECISIÓN: includeNewPR = false y unlockNewAchievements solo inserta (nunca borra), así no se
+// revoca ningún logro ya ganado; computeStats conserva 'first-pr' leyéndolo de DB. No se intenta
+// detectar un nuevo PR en una edición: un PR es un evento histórico del momento de la carga y
+// recomputarlo desde cero es ambiguo y desproporcionado para esta app.
+async function recomputeAchievements(userId: string): Promise<void> {
+  const stats = await computeStats(userId, false);
+  await unlockNewAchievements(userId, stats);
+}
+
 function parseCreateSet(body: unknown): CreateSetBody {
   const b = (body ?? {}) as Record<string, unknown>;
 
@@ -151,6 +161,7 @@ setsRouter.delete('/:id', async (req, res) => {
   });
   if (!existing) throw new HttpError(404, 'Serie no encontrada');
   await prisma.workoutSet.delete({ where: { id } });
+  await recomputeAchievements(userId);
   ok(res, { id });
 });
 
@@ -165,5 +176,6 @@ setsRouter.patch('/:id', async (req, res) => {
   });
   if (!existing) throw new HttpError(404, 'Serie no encontrada');
   const updated = await prisma.workoutSet.update({ where: { id }, data });
+  await recomputeAchievements(userId);
   ok(res, updated);
 });

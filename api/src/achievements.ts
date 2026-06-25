@@ -136,7 +136,7 @@ export async function computeStats(userId: string, includeNewPR: boolean): Promi
   };
 }
 
-function computeStreak(dayKeys: Set<string>): number {
+export function computeStreak(dayKeys: Set<string>): number {
   if (dayKeys.size === 0) return 0;
   const today = todayKeyMVD();
   // Si hoy no se entrenó aún la racha no se rompe: empezamos desde ayer.

@@ -27,5 +27,7 @@ export function dayBoundsMVD(date: Date): { start: Date; end: Date } {
 // Resta un día calendario a una clave 'YYYY-MM-DD' y devuelve la nueva clave.
 export function prevDayKey(dayKey: string): string {
   const [y, m, d] = dayKey.split('-').map(Number);
-  return localDayKeyMVD(new Date(Date.UTC(y, m - 1, d - 1)));
+  // Mediodía UTC: garantiza que al convertir a hora de Uruguay (UTC-3) siga siendo el mismo
+  // día calendario. Antes era medianoche UTC y caía al día anterior, salteando un día.
+  return localDayKeyMVD(new Date(Date.UTC(y, m - 1, d - 1, 12)));
 }
