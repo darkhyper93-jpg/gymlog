@@ -68,6 +68,14 @@ function computeChartPoints(sets: WorkoutSet[], metric: Metric): ChartPoint[] {
 
 // ─── Body weight section ──────────────────────────────────────────────────────
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-AR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function BodyWeightSection() {
   const { status, entries, addEntry, removeEntry } = useBodyWeight();
   const [weightInput, setWeightInput] = useState('');
