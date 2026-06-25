@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import webpush from 'web-push';
 import { prisma } from './db';
-import { getUserId } from './auth';
+import { getUserId, requireAuth } from './auth';
 import { HttpError, ok } from './http';
 import { todayKeyMVD, localDayKeyMVD } from './time';
 
@@ -55,14 +55,14 @@ async function hasTodayRoutine(userId: string): Promise<boolean> {
 }
 
 // GET /push/subscription — estado actual de la suscripción del usuario.
-pushRouter.get('/subscription', async (req, res) => {
+pushRouter.get('/subscription', requireAuth, async (req, res) => {
   const userId = getUserId(req);
   const sub = await prisma.pushSubscription.findUnique({ where: { userId } });
   ok(res, sub ? { active: true, notifyTime: sub.notifyTime } : { active: false });
 });
 
 // POST /push/subscribe — guarda o actualiza la suscripción push del usuario.
-pushRouter.post('/subscribe', async (req, res) => {
+pushRouter.post('/subscribe', requireAuth, async (req, res) => {
   const userId = getUserId(req);
   const b = (req.body ?? {}) as Record<string, unknown>;
 
@@ -82,7 +82,7 @@ pushRouter.post('/subscribe', async (req, res) => {
 });
 
 // DELETE /push/subscribe — elimina la suscripción del usuario.
-pushRouter.delete('/subscribe', async (req, res) => {
+pushRouter.delete('/subscribe', requireAuth, async (req, res) => {
   const userId = getUserId(req);
   await prisma.pushSubscription.deleteMany({ where: { userId } });
   ok(res, { active: false });
