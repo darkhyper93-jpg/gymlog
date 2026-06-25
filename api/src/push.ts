@@ -115,17 +115,19 @@ pushRouter.post('/send-daily', async (req, res) => {
     where: { notifyTime: nowMVD, lastSentDate: { not: today } },
   });
 
-// 👇 --- AGREGA ESTOS LOGS AQUÍ --- 👇
-console.log("================ DEPURACIÓN CRON ================");
-console.log("Hora calculada (nowMVD):", nowMVD);
-console.log("Suscripciones encontradas:", subs.length);
-if (subs.length > 0) {
-  const hasRoutineTest = await hasTodayRoutine(subs[0].userId);
-  console.log("¿Tiene rutina hoy el primer usuario?:", hasRoutineTest);
-}
-console.log("=================================================");
-// 👆 -------------------------------- 👆
+// 👇 --- REEMPLAZA CON ESTE NUEVO BLOQUE DE DEPURACIÓN --- 👇
+console.log("================ DEPURACIÓN AVANZADA ================");
+console.log("Hora calculada en el servidor (nowMVD):", nowMVD);
 
+// Busquemos TODAS las suscripciones en la base de datos para ver qué formatos tienen
+const allSubs = await prisma.pushSubscription.findMany({});
+console.log("Total de suscripciones en la BD:", allSubs.length);
+
+allSubs.forEach((s, index) => {
+  console.log(`[Sub ${index}] ID Usuario: ${s.userId} | Hora en BD: "${s.notifyTime}" | Último Envío (lastSentDate): "${s.lastSentDate}"`);
+});
+console.log("=====================================================");
+// 👆 --------------------------------------------------------- 👆
   let sent = 0;
   for (const sub of subs) {
     const hasRoutine = await hasTodayRoutine(sub.userId);
