@@ -15,9 +15,8 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
   const [timerSecs, setTimerSecs] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Arranca el timer, muestra toast de logro o PR tras cargar una serie exitosamente.
   const handleAddSet = useCallback(
-    async (input: { weight: number; reps: number; rir?: number }) => {
+    async (input: { weight: number; reps: number; rir?: number; date?: string; note?: string }) => {
       const { weightPR, oneRmPR, achievements } = await addSet(input);
       if (exercise.restSeconds != null && exercise.restSeconds > 0) {
         setTimerSecs(exercise.restSeconds);
@@ -106,7 +105,6 @@ function ReferencePanel({ reference }: { reference: { date: string; sets: Workou
       </Card>
     );
   }
-  // De-enfatizada a propósito: es referencia para superar, no la protagonista.
   return (
     <Card className="bg-surface-2 shadow-none">
       <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -136,7 +134,7 @@ function SetRow({
   index: number;
   set: WorkoutSet;
   onDelete: (id: string) => Promise<void>;
-  onEdit: (id: string, input: { weight?: number; reps?: number; rir?: number | null }) => Promise<void>;
+  onEdit: (id: string, input: { weight?: number; reps?: number; rir?: number | null; note?: string | null }) => Promise<void>;
 }) {
   const pending = set.id.startsWith('temp-');
   const [deleting, setDeleting] = useState(false);
@@ -145,6 +143,8 @@ function SetRow({
   const [editWeight, setEditWeight] = useState(String(set.weight));
   const [editReps, setEditReps] = useState(String(set.reps));
   const [editRir, setEditRir] = useState(set.rir == null ? '' : String(set.rir));
+  const [editNote, setEditNote] = useState(set.note ?? '');
+  const [showEditNote, setShowEditNote] = useState(set.note != null && set.note !== '');
 
   async function handleDelete() {
     if (deleting) return;
@@ -160,6 +160,8 @@ function SetRow({
     setEditWeight(String(set.weight));
     setEditReps(String(set.reps));
     setEditRir(set.rir == null ? '' : String(set.rir));
+    setEditNote(set.note ?? '');
+    setShowEditNote(set.note != null && set.note !== '');
     setEditing(true);
   }
 
@@ -174,6 +176,7 @@ function SetRow({
         weight: w,
         reps: r,
         rir: editRir === '' ? null : Number(editRir),
+        note: editNote.trim() || null,
       });
       setEditing(false);
     } catch {
@@ -185,7 +188,6 @@ function SetRow({
 
   const busy = pending || deleting || saving;
 
-  // Modo edición: fila expandida con campos inline
   if (editing) {
     return (
       <li className="flex flex-col gap-3 rounded-xl border border-brand/40 bg-surface px-4 py-3">
@@ -201,6 +203,24 @@ function SetRow({
             <NumberField label="Reps" value={editReps} onChange={(e) => setEditReps(e.target.value)} placeholder="0" />
             <NumberField label="RIR" value={editRir} onChange={(e) => setEditRir(e.target.value)} placeholder="—" />
           </div>
+          {showEditNote ? (
+            <textarea
+              value={editNote}
+              onChange={(e) => setEditNote(e.target.value)}
+              placeholder="Nota opcional…"
+              maxLength={500}
+              rows={2}
+              className="resize-none rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowEditNote(true)}
+              className="self-start text-sm text-muted underline-offset-2 hover:text-brand hover:underline"
+            >
+              + Agregar nota
+            </button>
+          )}
           <div className="flex gap-2">
             <Button type="submit" disabled={saving} className="flex-1">
               {saving ? 'Guardando…' : 'Guardar'}
@@ -214,49 +234,52 @@ function SetRow({
     );
   }
 
-  // Modo visualización normal
   return (
     <li
-      className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3
+      className={`flex flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3
         ${busy ? 'opacity-60' : ''}`}
     >
-      <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft
-          text-sm font-bold text-brand tabular"
-      >
-        {index}
-      </span>
-      <span className="tabular flex-1 text-base font-semibold text-fg">
-        <SetText set={set} />
-      </span>
-      {busy ? (
-        <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-border border-t-brand" />
-      ) : (
-        <>
-          <CheckCircleIcon className="h-5 w-5 shrink-0 text-brand" />
-          <button
-            type="button"
-            onClick={startEdit}
-            aria-label="Editar serie"
-            className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-brand/10 hover:text-brand"
-          >
-            <PencilIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            aria-label="Borrar serie"
-            className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-          >
-            <TrashIcon className="h-4 w-4" />
-          </button>
-        </>
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft
+            text-sm font-bold text-brand tabular"
+        >
+          {index}
+        </span>
+        <span className="tabular flex-1 text-base font-semibold text-fg">
+          <SetText set={set} />
+        </span>
+        {busy ? (
+          <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-border border-t-brand" />
+        ) : (
+          <>
+            <CheckCircleIcon className="h-5 w-5 shrink-0 text-brand" />
+            <button
+              type="button"
+              onClick={startEdit}
+              aria-label="Editar serie"
+              className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-brand/10 hover:text-brand"
+            >
+              <PencilIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              aria-label="Borrar serie"
+              className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+            >
+              <TrashIcon className="h-4 w-4" />
+            </button>
+          </>
+        )}
+      </div>
+      {set.note && (
+        <p className="ml-12 text-xs text-muted italic">{set.note}</p>
       )}
     </li>
   );
 }
 
-// Renderiza la serie con el RIR en acento cálido para que destaque del peso/reps.
 function SetText({ set }: { set: WorkoutSet }) {
   return (
     <>
@@ -266,16 +289,26 @@ function SetText({ set }: { set: WorkoutSet }) {
   );
 }
 
+// Devuelve 'YYYY-MM-DD' en el timezone del dispositivo (que debe ser Uruguay).
+function todayLocalStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function SetForm({
   prefill,
   onAdd,
 }: {
   prefill: { weight: string; reps: string; rir: string };
-  onAdd: (input: { weight: number; reps: number; rir?: number }) => Promise<void>;
+  onAdd: (input: { weight: number; reps: number; rir?: number; date?: string; note?: string }) => Promise<void>;
 }) {
   const [weight, setWeight] = useState(prefill.weight);
   const [reps, setReps] = useState(prefill.reps);
   const [rir, setRir] = useState(prefill.rir);
+  const today = useMemo(() => todayLocalStr(), []);
+  const [date, setDate] = useState(today);
+  const [note, setNote] = useState('');
+  const [showNote, setShowNote] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -295,8 +328,16 @@ function SetForm({
         weight: Number(weight),
         reps: Number(reps),
         rir: rir === '' ? undefined : Number(rir),
+        // Si la fecha no es hoy, enviamos mediodía en hora Uruguay para que el backend
+        // la agrupe correctamente (UTC-3 fijo, sin DST).
+        date: date !== today ? `${date}T12:00:00.000-03:00` : undefined,
+        note: note.trim() || undefined,
       });
       // Dejo los valores cargados como prefill de la próxima serie (para superar/repetir rápido).
+      // Resetear solo nota y fecha; peso/reps/rir se quedan para encadenar.
+      setNote('');
+      setShowNote(false);
+      setDate(today);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la serie');
     } finally {
@@ -326,6 +367,37 @@ function SetForm({
           placeholder="—"
         />
       </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-muted">Fecha</label>
+        <input
+          type="date"
+          value={date}
+          max={today}
+          onChange={(e) => setDate(e.target.value)}
+          className="rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+        />
+      </div>
+      {showNote ? (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">Nota (opcional)</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Ej: Fallo técnico en última rep, hombro cargado…"
+            maxLength={500}
+            rows={2}
+            className="resize-none rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted/50 focus:border-brand focus:outline-none"
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowNote(true)}
+          className="self-start text-sm text-muted underline-offset-2 hover:text-brand hover:underline"
+        >
+          + Agregar nota
+        </button>
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
       <Button type="submit" disabled={!valid || saving}>
         <PlusIcon className="h-5 w-5" />
@@ -335,8 +407,6 @@ function SetForm({
   );
 }
 
-// Prefill inteligente: priorizo la última serie cargada hoy (para encadenar la sesión);
-// si no hay, uso la última serie de la sesión previa (para igualar/superar).
 function pickPrefill(
   todaySets: WorkoutSet[],
   refSets: WorkoutSet[],
