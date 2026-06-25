@@ -7,6 +7,7 @@ import { computeStats, unlockNewAchievements } from './achievements';
 export const setsRouter = Router();
 
 type CreateSetBody = { exerciseId: string; weight: number; reps: number; rir?: number };
+type UpdateSetBody = { weight?: number; reps?: number; rir?: number | null };
 
 // DECISIÓN: Epley — la fórmula de 1RM más difundida, sin tablas de lookup.
 // Se usa tanto para detectar PRs al crear una serie como para calcular progreso en el frontend.
@@ -40,6 +41,37 @@ function parseCreateSet(body: unknown): CreateSetBody {
   };
 }
 
+function parseUpdateSet(body: unknown): UpdateSetBody {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const data: UpdateSetBody = {};
+
+  if (b.weight !== undefined) {
+    if (typeof b.weight !== 'number' || !Number.isFinite(b.weight) || b.weight < 0) {
+      throw new HttpError(400, 'weight debe ser un número ≥ 0');
+    }
+    data.weight = b.weight;
+  }
+  if (b.reps !== undefined) {
+    if (typeof b.reps !== 'number' || !Number.isInteger(b.reps) || b.reps <= 0) {
+      throw new HttpError(400, 'reps debe ser un entero > 0');
+    }
+    data.reps = b.reps;
+  }
+  if (b.rir !== undefined) {
+    if (b.rir === null) {
+      data.rir = null;
+    } else if (typeof b.rir !== 'number' || !Number.isInteger(b.rir) || b.rir < 0) {
+      throw new HttpError(400, 'rir debe ser un entero ≥ 0');
+    } else {
+      data.rir = b.rir;
+    }
+  }
+  if (data.weight === undefined && data.reps === undefined && b.rir === undefined) {
+    throw new HttpError(400, 'Hay que enviar al menos un campo a editar (weight, reps o rir)');
+  }
+  return data;
+}
+
 // POST /sets — registra una serie y detecta PRs de peso y 1RM estimado.
 // Responde { set, prs: { weightPR, oneRmPR }, achievements: [] } (achievements lo llena Etapa 5).
 setsRouter.post('/', async (req, res) => {
@@ -66,4 +98,32 @@ setsRouter.post('/', async (req, res) => {
   const achievements = await unlockNewAchievements(userId, stats);
 
   ok(res, { set, prs: { weightPR, oneRmPR }, achievements }, 201);
+});
+
+// DELETE /sets/:id — borra una serie del usuario.
+// Chequeo transitivo: la serie pertenece al usuario vía set → exercise → userId.
+// DECISIÓN: borrar una serie no revoca logros ya ganados (más simple y amable).
+setsRouter.delete('/:id', async (req, res) => {
+  const userId = getUserId(req);
+  const { id } = req.params;
+  const existing = await prisma.workoutSet.findFirst({
+    where: { id, exercise: { userId } },
+  });
+  if (!existing) throw new HttpError(404, 'Serie no encontrada');
+  await prisma.workoutSet.delete({ where: { id } });
+  ok(res, { id });
+});
+
+// PATCH /sets/:id — edita weight, reps o rir de una serie del usuario.
+// Mismo chequeo transitivo que DELETE.
+setsRouter.patch('/:id', async (req, res) => {
+  const userId = getUserId(req);
+  const { id } = req.params;
+  const data = parseUpdateSet(req.body);
+  const existing = await prisma.workoutSet.findFirst({
+    where: { id, exercise: { userId } },
+  });
+  if (!existing) throw new HttpError(404, 'Serie no encontrada');
+  const updated = await prisma.workoutSet.update({ where: { id }, data });
+  ok(res, updated);
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Achievement, WorkoutSet } from '../types';
 import { getExerciseSets } from '../api/exercises';
-import { createSet } from '../api/sets';
+import { createSet, deleteSet } from '../api/sets';
 
 type Status = 'loading' | 'error' | 'ready';
 
@@ -96,5 +96,22 @@ export function useRegister(exerciseId: string) {
     [exerciseId],
   );
 
-  return { status, error, todaySets, reference, reload: load, addSet };
+  // Borra una serie ya confirmada (no aplica a temp-). Optimista: la quita al toque
+  // y hace rollback si el servidor falla.
+  const removeSet = useCallback(
+    async (id: string): Promise<void> => {
+      if (id.startsWith('temp-')) return;
+      const prev = todaySets;
+      setTodaySets((current) => current.filter((s) => s.id !== id));
+      try {
+        await deleteSet(id);
+      } catch (e) {
+        setTodaySets(prev);
+        throw e;
+      }
+    },
+    [todaySets],
+  );
+
+  return { status, error, todaySets, reference, reload: load, addSet, removeSet };
 }

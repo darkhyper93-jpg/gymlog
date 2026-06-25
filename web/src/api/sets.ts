@@ -14,6 +14,20 @@ export type SetResponse = {
   achievements: Achievement[];
 };
 
+export type UpdateSetInput = {
+  weight?: number;
+  reps?: number;
+  rir?: number | null;
+};
+
 export function createSet(input: NewSet): Promise<SetResponse> {
   return apiRequest<SetResponse>('/sets', { method: 'POST', body: input });
+}
+
+export function deleteSet(id: string): Promise<{ id: string }> {
+  return apiRequest<{ id: string }>(`/sets/${id}`, { method: 'DELETE' });
+}
+
+export function updateSet(id: string, input: UpdateSetInput): Promise<WorkoutSet> {
+  return apiRequest<WorkoutSet>(`/sets/${id}`, { method: 'PATCH', body: input });
 }

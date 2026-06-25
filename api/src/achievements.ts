@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from './db';
 import { requireAuth, getUserId } from './auth';
 import { ok } from './http';
+import { localDayKeyMVD, todayKeyMVD, prevDayKey } from './time';
 
 // ─── Definiciones estáticas ───────────────────────────────────────────────────
 
@@ -114,8 +115,8 @@ export async function computeStats(userId: string, includeNewPR: boolean): Promi
   const totalSets = sets.length;
   const totalVolume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
 
-  // Días distintos (en hora local del servidor)
-  const dayKeys = new Set(sets.map((s) => localDayKeyServer(s.date)));
+  // Días distintos en hora de Uruguay (no en UTC del servidor)
+  const dayKeys = new Set(sets.map((s) => localDayKeyMVD(s.date)));
   const trainingDays = dayKeys.size;
 
   // Racha actual: días consecutivos contando hacia atrás desde hoy
@@ -135,27 +136,15 @@ export async function computeStats(userId: string, includeNewPR: boolean): Promi
   };
 }
 
-function localDayKeyServer(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 function computeStreak(dayKeys: Set<string>): number {
   if (dayKeys.size === 0) return 0;
-  const today = localDayKeyServer(new Date());
+  const today = todayKeyMVD();
+  // Si hoy no se entrenó aún la racha no se rompe: empezamos desde ayer.
+  let cursorKey = dayKeys.has(today) ? today : prevDayKey(today);
   let streak = 0;
-  let cursor = new Date();
-  // Empezamos desde hoy o ayer (si hoy no se entrenó aún, la racha no se rompe)
-  if (!dayKeys.has(today)) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  for (;;) {
-    const key = localDayKeyServer(cursor);
-    if (!dayKeys.has(key)) break;
+  while (dayKeys.has(cursorKey)) {
     streak++;
-    cursor.setDate(cursor.getDate() - 1);
+    cursorKey = prevDayKey(cursorKey);
   }
   return streak;
 }

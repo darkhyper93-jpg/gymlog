@@ -2,6 +2,7 @@ import 'dotenv/config'; // carga api/.env → process.env (JWT_SECRET, etc.) ant
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { exercisesRouter } from './exercises';
 import { setsRouter } from './sets';
 import { authRouter, requireAuth } from './auth';
@@ -22,8 +23,12 @@ app.get('/health', (_req, res) => {
   res.json({ success: true, data: 'ok' });
 });
 
+// Rate limiting en las rutas de auth para frenar fuerza bruta.
+// Con 3 usuarios el riesgo es bajo, pero la API está expuesta a internet.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+
 // Rutas públicas de login.
-app.use('/auth', authRouter);
+app.use('/auth', authLimiter, authRouter);
 
 // Rutas de datos protegidas: exigen Authorization: Bearer <token> (requireAuth).
 app.use('/exercises', requireAuth, exercisesRouter);

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from './db';
 import { getUserId } from './auth';
 import { HttpError, ok } from './http';
+import { dayBoundsMVD } from './time';
 
 export const exercisesRouter = Router();
 
@@ -152,13 +153,9 @@ exercisesRouter.get('/:id/last', async (req, res) => {
     return;
   }
 
-  // DECISIÓN: una "sesión" son todas las series del mismo día calendario que la última
-  // serie registrada. Para una app personal de una sola zona horaria, usar los límites del
-  // día local alcanza y es simple.
-  const dayStart = new Date(latest.date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+  // DECISIÓN: una "sesión" son todas las series del mismo día calendario (hora Uruguay)
+  // que la última serie registrada. dayBoundsMVD devuelve los límites UTC correctos.
+  const { start: dayStart, end: dayEnd } = dayBoundsMVD(latest.date);
 
   const sets = await prisma.workoutSet.findMany({
     where: { exerciseId: id, date: { gte: dayStart, lt: dayEnd } },

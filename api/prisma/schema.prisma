@@ -15,7 +15,7 @@ model Exercise {
   name        String
   target      String?
   // Grupo muscular para organizar los ejercicios en secciones (espalda, pecho, etc.).
-  // String? (no enum) porque SQLite no soporta enums en Prisma; se valida en el backend.
+  // String? (no enum) por compatibilidad histórica; se valida en el backend.
   // Nullable para no romper los ejercicios ya cargados antes de sumar este campo.
   muscleGroup  String?
   // Segundos de descanso objetivo para el timer entre series. Null = sin preferencia.

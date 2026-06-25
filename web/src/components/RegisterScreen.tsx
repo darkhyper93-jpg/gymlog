@@ -4,14 +4,14 @@ import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
-import { AlertTriangleIcon, CheckCircleIcon, PlusIcon, TargetIcon } from './icons';
+import { AlertTriangleIcon, CheckCircleIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
 import { RestTimer } from './RestTimer';
 import { Toast } from './Toast';
 
 // Pantalla "registrar hoy": el corazón del V1. Muestra objetivo + última vez para superar,
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
 export function RegisterScreen({ exercise }: { exercise: Exercise }) {
-  const { status, error, todaySets, reference, reload, addSet } = useRegister(exercise.id);
+  const { status, error, todaySets, reference, reload, addSet, removeSet } = useRegister(exercise.id);
   const [timerSecs, setTimerSecs] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -78,7 +78,7 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
             ) : (
               <ol className="flex flex-col gap-2">
                 {todaySets.map((s, i) => (
-                  <SetRow key={s.id} index={i + 1} set={s} />
+                  <SetRow key={s.id} index={i + 1} set={s} onDelete={removeSet} />
                 ))}
               </ol>
             )}
@@ -127,12 +127,32 @@ function ReferencePanel({ reference }: { reference: { date: string; sets: Workou
   );
 }
 
-function SetRow({ index, set }: { index: number; set: WorkoutSet }) {
+function SetRow({
+  index,
+  set,
+  onDelete,
+}: {
+  index: number;
+  set: WorkoutSet;
+  onDelete: (id: string) => Promise<void>;
+}) {
   const pending = set.id.startsWith('temp-');
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete(set.id);
+    } catch {
+      setDeleting(false);
+    }
+  }
+
   return (
     <li
       className={`flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3
-        ${pending ? 'opacity-60' : ''}`}
+        ${pending || deleting ? 'opacity-60' : ''}`}
     >
       <span
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft
@@ -143,10 +163,20 @@ function SetRow({ index, set }: { index: number; set: WorkoutSet }) {
       <span className="tabular flex-1 text-base font-semibold text-fg">
         <SetText set={set} />
       </span>
-      {pending ? (
+      {pending || deleting ? (
         <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-border border-t-brand" />
       ) : (
-        <CheckCircleIcon className="h-5 w-5 shrink-0 text-brand" />
+        <>
+          <CheckCircleIcon className="h-5 w-5 shrink-0 text-brand" />
+          <button
+            type="button"
+            onClick={handleDelete}
+            aria-label="Borrar serie"
+            className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </button>
+        </>
       )}
     </li>
   );
