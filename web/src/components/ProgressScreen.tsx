@@ -3,6 +3,7 @@ import type { Exercise, WorkoutSet } from '../types';
 import { useExercises } from '../hooks/useExercises';
 import { localDayKey } from '../hooks/useRegister';
 import { getExerciseSets } from '../api/exercises';
+import { downloadExportCsv } from '../api/export';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
 import { Button, Card, Chip, SectionLabel, Spinner, StateView, TextInput } from './ui';
 import { AlertTriangleIcon, ChevronLeftIcon, DumbbellIcon, TrendingUpIcon, TrophyIcon } from './icons';
@@ -79,6 +80,21 @@ function ExerciseSelector({
   onSelect: (ex: Exercise) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadExportCsv();
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Error al exportar');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -128,7 +144,21 @@ function ExerciseSelector({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted">Elegí un ejercicio para ver su progreso y PRs.</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">Elegí un ejercicio para ver su progreso y PRs.</p>
+        {exercises.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            className="shrink-0 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-medium
+              text-muted transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
+          >
+            {exporting ? 'Exportando…' : '↓ CSV'}
+          </button>
+        )}
+      </div>
+      {exportError && <p className="text-sm text-danger">{exportError}</p>}
       <TextInput
         placeholder="Buscar ejercicio…"
         value={query}
