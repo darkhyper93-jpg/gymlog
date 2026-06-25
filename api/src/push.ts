@@ -51,17 +51,7 @@ async function hasTodayRoutine(userId: string): Promise<boolean> {
     select: { name: true },
   });
 
-  // 👇 --- LOGS PARA DETECTAR EL BUG DE LA RUTINA --- 👇
-  console.log("=== COMPROBANDO RUTINA DE HOY ===");
-  console.log("Abreviación del día actual buscada (abbr):", `"${abbr}"`);
-  console.log("Días de rutina encontrados en la BD para este usuario:", days.map(d => `"${d.name}"`));
-  
-  const result = days.some((d) => d.name.toLowerCase().startsWith(abbr));
-  console.log("¿Coincide algún día?:", result);
-  console.log("=================================");
-  // 👆 -------------------------------------------- 👆
-
-  return result;
+  return days.some((d) => d.name.toLowerCase().startsWith(abbr));
 }
 
 // GET /push/subscription — estado actual de la suscripción del usuario.
@@ -131,19 +121,6 @@ pushRouter.post('/send-daily', async (req, res) => {
     },
   });
 
-// 👇 --- REEMPLAZA CON ESTE NUEVO BLOQUE DE DEPURACIÓN --- 👇
-console.log("================ DEPURACIÓN AVANZADA ================");
-console.log("Hora calculada en el servidor (nowMVD):", nowMVD);
-
-// Busquemos TODAS las suscripciones en la base de datos para ver qué formatos tienen
-const allSubs = await prisma.pushSubscription.findMany({});
-console.log("Total de suscripciones en la BD:", allSubs.length);
-
-allSubs.forEach((s, index) => {
-  console.log(`[Sub ${index}] ID Usuario: ${s.userId} | Hora en BD: "${s.notifyTime}" | Último Envío (lastSentDate): "${s.lastSentDate}"`);
-});
-console.log("=====================================================");
-// 👆 --------------------------------------------------------- 👆
   let sent = 0;
   for (const sub of subs) {
     const hasRoutine = await hasTodayRoutine(sub.userId);
