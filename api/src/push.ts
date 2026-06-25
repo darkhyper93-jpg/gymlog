@@ -42,16 +42,26 @@ async function hasTodayRoutine(userId: string): Promise<boolean> {
   const weekday = new Intl.DateTimeFormat('es-UY', {
     timeZone: 'America/Montevideo',
     weekday: 'short',
-  }).format(now); // "lun.", "mar.", …
+  }).format(now); 
 
-  const abbr = weekday.replace('.', '').toLowerCase(); // "lun", "mar", …
+  const abbr = weekday.replace('.', '').toLowerCase(); 
 
   const days = await prisma.routineDay.findMany({
     where: { routine: { userId } },
     select: { name: true },
   });
 
-  return days.some((d) => d.name.toLowerCase().startsWith(abbr));
+  // 👇 --- LOGS PARA DETECTAR EL BUG DE LA RUTINA --- 👇
+  console.log("=== COMPROBANDO RUTINA DE HOY ===");
+  console.log("Abreviación del día actual buscada (abbr):", `"${abbr}"`);
+  console.log("Días de rutina encontrados en la BD para este usuario:", days.map(d => `"${d.name}"`));
+  
+  const result = days.some((d) => d.name.toLowerCase().startsWith(abbr));
+  console.log("¿Coincide algún día?:", result);
+  console.log("=================================");
+  // 👆 -------------------------------------------- 👆
+
+  return result;
 }
 
 // GET /push/subscription — estado actual de la suscripción del usuario.
