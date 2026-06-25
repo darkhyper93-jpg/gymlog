@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { Exercise, Routine, RoutineDay, RoutineDayExercise } from '../types';
+import type { Exercise, Routine, RoutineDay, RoutineDayExercise, WorkoutSet } from '../types';
 import { useRoutines } from '../hooks/useRoutines';
 import { useExercises } from '../hooks/useExercises';
+import { useTodaySets } from '../hooks/useTodaySets';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
 import { Button, Card, IconButton, Modal, Spinner, StateView, TextInput } from './ui';
 import {
@@ -171,10 +172,24 @@ function ExerciseSelectorModal({
 
 // ─── ExerciseRow ──────────────────────────────────────────────────────────────
 
+function TodayStatus({ sets }: { sets: WorkoutSet[] | undefined }) {
+  if (sets === undefined) return null; // cargando, no mostrar nada
+  if (sets.length === 0) {
+    return <span className="text-xs text-muted/60">— sin series hoy</span>;
+  }
+  const summary = sets.map((s) => `${s.weight}×${s.reps}`).join(', ');
+  return (
+    <span className="text-xs font-medium text-brand">
+      ✓ {sets.length} {sets.length === 1 ? 'serie' : 'series'} hoy: {summary}
+    </span>
+  );
+}
+
 function ExerciseRow({
   item,
   isFirst,
   isLast,
+  todaySets,
   onMoveUp,
   onMoveDown,
   onRemove,
@@ -183,6 +198,7 @@ function ExerciseRow({
   item: RoutineDayExercise;
   isFirst: boolean;
   isLast: boolean;
+  todaySets: WorkoutSet[] | undefined;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onRemove: () => void;
@@ -211,12 +227,18 @@ function ExerciseRow({
           <ChevronDownIcon className="h-3.5 w-3.5" />
         </button>
       </div>
-      {/* Name + group */}
+      {/* Name + group + target + today status */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-sm font-semibold leading-tight text-fg">
           {item.exercise.name}
         </span>
-        <span className="text-xs text-muted">{muscleGroupLabel(item.exercise.muscleGroup)}</span>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0">
+          <span className="text-xs text-muted">{muscleGroupLabel(item.exercise.muscleGroup)}</span>
+          {item.exercise.target && (
+            <span className="text-xs text-muted">· {item.exercise.target}</span>
+          )}
+        </div>
+        <TodayStatus sets={todaySets} />
       </div>
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-1">
@@ -248,6 +270,7 @@ function DaySection({
   isFirst,
   isLast,
   hook,
+  byExercise,
   onOpenAddExercise,
   onOpenEditDay,
   onRegister,
@@ -257,6 +280,7 @@ function DaySection({
   isFirst: boolean;
   isLast: boolean;
   hook: ReturnType<typeof useRoutines>;
+  byExercise: Map<string, WorkoutSet[]> | null;
   onOpenAddExercise: () => void;
   onOpenEditDay: () => void;
   onRegister: (ex: Exercise) => void;
@@ -265,6 +289,13 @@ function DaySection({
     () => [...day.exercises].sort((a, b) => a.order - b.order),
     [day.exercises],
   );
+
+  // Progreso del día: cuántos ejercicios tienen al menos una serie hoy.
+  const dayProgress = useMemo(() => {
+    if (!byExercise || sorted.length === 0) return null;
+    const done = sorted.filter((item) => (byExercise.get(item.exerciseId)?.length ?? 0) > 0).length;
+    return { done, total: sorted.length };
+  }, [byExercise, sorted]);
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-surface-lowest p-3">
@@ -290,7 +321,20 @@ function DaySection({
             <ChevronDownIcon className="h-3 w-3" />
           </button>
         </div>
-        <span className="flex-1 text-sm font-semibold text-fg">{day.name}</span>
+        <div className="flex flex-1 items-baseline gap-2">
+          <span className="text-sm font-semibold text-fg">{day.name}</span>
+          {dayProgress !== null && (
+            <span
+              className={`text-xs font-medium tabular ${
+                dayProgress.done === dayProgress.total && dayProgress.total > 0
+                  ? 'text-brand'
+                  : 'text-muted'
+              }`}
+            >
+              {dayProgress.done}/{dayProgress.total} hoy
+            </span>
+          )}
+        </div>
         <IconButton aria-label="Editar día" onClick={onOpenEditDay} className="h-8 w-8">
           <PencilIcon className="h-3.5 w-3.5" />
         </IconButton>
@@ -315,6 +359,7 @@ function DaySection({
               item={item}
               isFirst={idx === 0}
               isLast={idx === sorted.length - 1}
+              todaySets={byExercise?.get(item.exerciseId)}
               onMoveUp={() => hook.moveExerciseUp(routineId, day.id, item.id)}
               onMoveDown={() => hook.moveExerciseDown(routineId, day.id, item.id)}
               onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
@@ -345,6 +390,7 @@ function RoutineCard({
   isExpanded,
   onToggle,
   hook,
+  byExercise,
   onOpenModal,
   onRegister,
 }: {
@@ -352,6 +398,7 @@ function RoutineCard({
   isExpanded: boolean;
   onToggle: () => void;
   hook: ReturnType<typeof useRoutines>;
+  byExercise: Map<string, WorkoutSet[]> | null;
   onOpenModal: (state: ModalState) => void;
   onRegister: (ex: Exercise) => void;
 }) {
@@ -409,6 +456,7 @@ function RoutineCard({
                   isFirst={idx === 0}
                   isLast={idx === sortedDays.length - 1}
                   hook={hook}
+                  byExercise={byExercise}
                   onOpenAddExercise={() =>
                     onOpenModal({ type: 'add-exercise', routineId: routine.id, dayId: day.id })
                   }
@@ -440,6 +488,7 @@ function RoutineCard({
 export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => void }) {
   const hook = useRoutines();
   const { routines, status, error, reload } = hook;
+  const { byExercise } = useTodaySets();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
@@ -489,6 +538,7 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
               isExpanded={expandedId === routine.id}
               onToggle={() => setExpandedId((prev) => (prev === routine.id ? null : routine.id))}
               hook={hook}
+              byExercise={byExercise}
               onOpenModal={setModal}
               onRegister={onRegister}
             />

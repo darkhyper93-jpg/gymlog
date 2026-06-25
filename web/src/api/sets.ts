@@ -24,6 +24,10 @@ export function createSet(input: NewSet): Promise<SetResponse> {
   return apiRequest<SetResponse>('/sets', { method: 'POST', body: input });
 }
 
+export function getTodaySets(): Promise<WorkoutSet[]> {
+  return apiRequest<WorkoutSet[]>('/sets/today');
+}
+
 export function deleteSet(id: string): Promise<{ id: string }> {
   return apiRequest<{ id: string }>(`/sets/${id}`, { method: 'DELETE' });
 }

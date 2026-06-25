@@ -3,6 +3,7 @@ import { prisma } from './db';
 import { getUserId } from './auth';
 import { HttpError, ok } from './http';
 import { computeStats, unlockNewAchievements } from './achievements';
+import { dayBoundsMVD } from './time';
 
 export const setsRouter = Router();
 
@@ -71,6 +72,18 @@ function parseUpdateSet(body: unknown): UpdateSetBody {
   }
   return data;
 }
+
+// GET /sets/today — series del usuario de hoy (hora Uruguay) agrupadas implícitamente.
+// El frontend las agrupa por exerciseId para el "planeado vs real" en rutinas.
+setsRouter.get('/today', async (req, res) => {
+  const userId = getUserId(req);
+  const { start, end } = dayBoundsMVD(new Date());
+  const sets = await prisma.workoutSet.findMany({
+    where: { exercise: { userId }, date: { gte: start, lt: end } },
+    orderBy: { date: 'asc' },
+  });
+  ok(res, sets);
+});
 
 // POST /sets — registra una serie y detecta PRs de peso y 1RM estimado.
 // Responde { set, prs: { weightPR, oneRmPR }, achievements: [] } (achievements lo llena Etapa 5).
