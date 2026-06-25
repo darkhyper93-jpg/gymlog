@@ -7,8 +7,8 @@ import { dayBoundsMVD } from './time';
 
 export const setsRouter = Router();
 
-type CreateSetBody = { exerciseId: string; weight: number; reps: number; rir?: number };
-type UpdateSetBody = { weight?: number; reps?: number; rir?: number | null };
+type CreateSetBody = { exerciseId: string; weight: number; reps: number; rir?: number; date?: Date; note?: string };
+type UpdateSetBody = { weight?: number; reps?: number; rir?: number | null; note?: string | null };
 
 // DECISIÓN: Epley — la fórmula de 1RM más difundida, sin tablas de lookup.
 // Se usa tanto para detectar PRs al crear una serie como para calcular progreso en el frontend.
@@ -34,12 +34,29 @@ function parseCreateSet(body: unknown): CreateSetBody {
     }
   }
 
-  return {
+  const result: CreateSetBody = {
     exerciseId: b.exerciseId.trim(),
     weight: b.weight,
     reps: b.reps,
     rir: typeof b.rir === 'number' ? b.rir : undefined,
   };
+
+  if (b.date !== undefined) {
+    if (typeof b.date !== 'string') throw new HttpError(400, 'date debe ser una fecha ISO');
+    const d = new Date(b.date);
+    if (isNaN(d.getTime())) throw new HttpError(400, 'date inválida');
+    if (d > new Date()) throw new HttpError(400, 'No podés registrar series en el futuro');
+    result.date = d;
+  }
+
+  if (b.note !== undefined && b.note !== null) {
+    if (typeof b.note !== 'string') throw new HttpError(400, 'note debe ser texto');
+    const trimmed = b.note.trim();
+    if (trimmed.length > 500) throw new HttpError(400, 'note no puede superar 500 caracteres');
+    result.note = trimmed || undefined;
+  }
+
+  return result;
 }
 
 function parseUpdateSet(body: unknown): UpdateSetBody {
@@ -67,8 +84,18 @@ function parseUpdateSet(body: unknown): UpdateSetBody {
       data.rir = b.rir;
     }
   }
-  if (data.weight === undefined && data.reps === undefined && b.rir === undefined) {
-    throw new HttpError(400, 'Hay que enviar al menos un campo a editar (weight, reps o rir)');
+  if (b.note !== undefined) {
+    if (b.note === null) {
+      data.note = null;
+    } else if (typeof b.note !== 'string') {
+      throw new HttpError(400, 'note debe ser texto');
+    } else {
+      data.note = b.note.trim() || null;
+    }
+  }
+
+  if (data.weight === undefined && data.reps === undefined && b.rir === undefined && b.note === undefined) {
+    throw new HttpError(400, 'Hay que enviar al menos un campo a editar (weight, reps, rir o note)');
   }
   return data;
 }

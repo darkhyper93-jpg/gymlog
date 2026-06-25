@@ -74,23 +74,31 @@ export function useRegister(exerciseId: string) {
       weight: number;
       reps: number;
       rir?: number;
+      date?: string;
+      note?: string;
     }): Promise<{ weightPR: boolean; oneRmPR: boolean; achievements: Achievement[] }> => {
+      const setDate = input.date ?? new Date().toISOString();
+      const isToday = localDayKey(setDate) === todayKey();
       const temp: WorkoutSet = {
         id: `temp-${Date.now()}`,
         exerciseId,
-        date: new Date().toISOString(),
+        date: setDate,
         weight: input.weight,
         reps: input.reps,
         rir: input.rir ?? null,
+        note: input.note ?? null,
         createdAt: new Date().toISOString(),
       };
-      setTodaySets((prev) => [...prev, temp]);
+      // Solo agregar optimistamente a todaySets si la serie es de hoy.
+      if (isToday) setTodaySets((prev) => [...prev, temp]);
       try {
         const { set: created, prs, achievements } = await createSet({ exerciseId, ...input });
-        setTodaySets((prev) => prev.map((s) => (s.id === temp.id ? created : s)));
+        if (isToday) {
+          setTodaySets((prev) => prev.map((s) => (s.id === temp.id ? created : s)));
+        }
         return { ...prs, achievements };
       } catch (e) {
-        setTodaySets((prev) => prev.filter((s) => s.id !== temp.id));
+        if (isToday) setTodaySets((prev) => prev.filter((s) => s.id !== temp.id));
         throw e;
       }
     },
@@ -126,6 +134,7 @@ export function useRegister(exerciseId: string) {
                 weight: input.weight ?? s.weight,
                 reps: input.reps ?? s.reps,
                 rir: input.rir !== undefined ? input.rir : s.rir,
+                note: input.note !== undefined ? input.note : s.note,
               }
             : s,
         ),

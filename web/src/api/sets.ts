@@ -6,6 +6,8 @@ export type NewSet = {
   weight: number;
   reps: number;
   rir?: number;
+  date?: string;   // ISO — si no se envía, el backend usa now()
+  note?: string;
 };
 
 export type SetResponse = {
@@ -18,6 +20,7 @@ export type UpdateSetInput = {
   weight?: number;
   reps?: number;
   rir?: number | null;
+  note?: string | null;
 };
 
 export function createSet(input: NewSet): Promise<SetResponse> {
