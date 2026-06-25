@@ -260,3 +260,23 @@ export function BellOffIcon(props: SVGProps<SVGSVGElement>) {
     </Base>
   );
 }
+
+export function ShareIosIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <rect x="5" y="9" width="14" height="13" rx="1" ry="1" />
+      <path d="M12 2v10" />
+      <path d="m9 5 3-3 3 3" />
+    </Base>
+  );
+}
+
+export function PlusSquareIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <path d="M12 8v8" />
+      <path d="M8 12h8" />
+    </Base>
+  );
+}

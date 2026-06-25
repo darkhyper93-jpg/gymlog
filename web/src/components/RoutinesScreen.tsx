@@ -272,7 +272,7 @@ function ExerciseRow({
       </div>
       {/* Name + group + target + today status */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm font-semibold leading-tight text-fg">
+        <span className="break-words text-sm font-semibold leading-tight text-fg">
           {item.exercise.name}
         </span>
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0">
@@ -331,6 +331,7 @@ function DaySection({
   onRegister: (ex: Exercise) => void;
 }) {
   const isToday = matchesToday(day.name, todayAbbr);
+  const [open, setOpen] = useState(isToday);
 
   const sorted = useMemo(
     () => [...day.exercises].sort((a, b) => a.order - b.order),
@@ -374,7 +375,12 @@ function DaySection({
             <ChevronDownIcon className="h-3 w-3" />
           </button>
         </div>
-        <div className="flex flex-1 items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex flex-1 items-center gap-2 text-left"
+        >
           <span className={`text-sm font-semibold ${isToday ? 'text-brand' : 'text-fg'}`}>
             {day.name}
           </span>
@@ -385,14 +391,20 @@ function DaySection({
           )}
           {dayProgress !== null && (
             <span
-              className={`ml-auto text-xs font-medium tabular ${
+              className={`text-xs font-medium tabular ${
                 dayProgress.done === dayProgress.total ? 'text-brand' : 'text-muted'
               }`}
             >
               {dayProgress.done}/{dayProgress.total} ✓
             </span>
           )}
-        </div>
+          <span className="ml-auto text-muted">
+            {open
+              ? <ChevronUpIcon className="h-3.5 w-3.5" />
+              : <ChevronDownIcon className="h-3.5 w-3.5" />
+            }
+          </span>
+        </button>
         <IconButton aria-label="Editar día" onClick={onOpenEditDay} className="h-8 w-8">
           <PencilIcon className="h-3.5 w-3.5" />
         </IconButton>
@@ -406,44 +418,48 @@ function DaySection({
         </button>
       </div>
 
-      {/* Exercises list */}
-      {sorted.length === 0 ? (
-        <p className="py-1.5 text-center text-xs text-muted">Sin ejercicios todavía</p>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {sorted.map((item, idx) => (
-            <ExerciseRow
-              key={item.id}
-              item={item}
-              isFirst={idx === 0}
-              isLast={idx === sorted.length - 1}
-              todaySets={
-                // Solo mostrar estado de hoy en el día que corresponde a hoy.
-                // byExercise null = cargando → undefined (no mostrar nada).
-                // byExercise sin la clave = sin series → [] → "sin series hoy".
-                isToday && byExercise !== null
-                  ? (byExercise.get(item.exerciseId) ?? [])
-                  : undefined
-              }
-              onMoveUp={() => hook.moveExerciseUp(routineId, day.id, item.id)}
-              onMoveDown={() => hook.moveExerciseDown(routineId, day.id, item.id)}
-              onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
-              onRegister={onRegister}
-            />
-          ))}
-        </div>
-      )}
+      {open && (
+        <>
+          {/* Exercises list */}
+          {sorted.length === 0 ? (
+            <p className="py-1.5 text-center text-xs text-muted">Sin ejercicios todavía</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {sorted.map((item, idx) => (
+                <ExerciseRow
+                  key={item.id}
+                  item={item}
+                  isFirst={idx === 0}
+                  isLast={idx === sorted.length - 1}
+                  todaySets={
+                    // Solo mostrar estado de hoy en el día que corresponde a hoy.
+                    // byExercise null = cargando → undefined (no mostrar nada).
+                    // byExercise sin la clave = sin series → [] → "sin series hoy".
+                    isToday && byExercise !== null
+                      ? (byExercise.get(item.exerciseId) ?? [])
+                      : undefined
+                  }
+                  onMoveUp={() => hook.moveExerciseUp(routineId, day.id, item.id)}
+                  onMoveDown={() => hook.moveExerciseDown(routineId, day.id, item.id)}
+                  onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
+                  onRegister={onRegister}
+                />
+              ))}
+            </div>
+          )}
 
-      {/* Add exercise */}
-      <button
-        onClick={onOpenAddExercise}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed
-          border-border py-2 text-xs font-semibold text-muted transition-colors
-          hover:border-brand hover:text-brand"
-      >
-        <PlusIcon className="h-3.5 w-3.5" />
-        Agregar ejercicio
-      </button>
+          {/* Add exercise */}
+          <button
+            onClick={onOpenAddExercise}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed
+              border-border py-2 text-xs font-semibold text-muted transition-colors
+              hover:border-brand hover:text-brand"
+          >
+            <PlusIcon className="h-3.5 w-3.5" />
+            Agregar ejercicio
+          </button>
+        </>
+      )}
     </div>
   );
 }

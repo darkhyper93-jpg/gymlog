@@ -11,6 +11,8 @@ import { IconButton } from './components/ui';
 import { ChevronLeftIcon, LogOutIcon } from './components/icons';
 import { useAuth } from './hooks/useAuth';
 import { NotificationButton, NotificationModal } from './components/NotificationSettings';
+import { useIosInstall } from './hooks/useIosInstall';
+import { IosInstallModal } from './components/IosInstallModal';
 
 // DECISIÓN: sin router (igual que V1). Con 4 tabs + sub-vista register, un par de estados
 // sigue siendo más simple que añadir react-router a este proyecto pequeño.
@@ -28,9 +30,11 @@ type SubView = { name: 'register'; exercise: Exercise } | null;
 
 export default function App() {
   const { isAuthed, logout } = useAuth();
+  const { eligible: iosEligible } = useIosInstall();
   const [tab, setTab] = useState<Tab>('ejercicios');
   const [subView, setSubView] = useState<SubView>(null);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showIosInstall, setShowIosInstall] = useState(false);
 
   if (!isAuthed) return <LoginScreen />;
 
@@ -72,6 +76,17 @@ export default function App() {
             </div>
           )}
           <div className="ml-auto flex items-center gap-1">
+            {iosEligible && (
+              <button
+                type="button"
+                onClick={() => setShowIosInstall(true)}
+                aria-label="Instalar app"
+                className="flex h-9 items-center justify-center rounded-xl px-2.5 text-xs
+                  font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+              >
+                Instalar
+              </button>
+            )}
             <NotificationButton onClick={() => setShowNotifs(true)} />
             <IconButton aria-label="Cerrar sesión" onClick={logout}>
               <LogOutIcon className="h-5 w-5" />
@@ -103,6 +118,7 @@ export default function App() {
       <NavBar tab={tab} onChange={handleTabChange} />
 
       {showNotifs && <NotificationModal onClose={() => setShowNotifs(false)} />}
+      {showIosInstall && <IosInstallModal onClose={() => setShowIosInstall(false)} />}
     </div>
   );
 }
