@@ -17,6 +17,30 @@ import {
   TrashIcon,
 } from './icons';
 
+// ─── Días de la semana ────────────────────────────────────────────────────────
+
+const WEEKDAY_PRESETS = ['Lun', 'Mar', 'Mier', 'Jue', 'Vie', 'Sab', 'Dom'];
+
+// Devuelve la abreviatura del día de hoy en hora de Uruguay.
+function todayWeekdayMVD(): string {
+  const en = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Montevideo',
+    weekday: 'short',
+  }).format(new Date());
+  const map: Record<string, string> = {
+    Sun: 'Dom', Mon: 'Lun', Tue: 'Mar', Wed: 'Mier', Thu: 'Jue', Fri: 'Vie', Sat: 'Sab',
+  };
+  return map[en] ?? '';
+}
+
+// Coincidencia flexible: "Jue", "Jueves" y "jue" matchean el mismo día.
+function matchesToday(dayName: string, todayAbbr: string): boolean {
+  if (!todayAbbr) return false;
+  const n = dayName.trim().toLowerCase();
+  const t = todayAbbr.toLowerCase();
+  return n === t || n.startsWith(t);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ModalState =
@@ -32,11 +56,13 @@ type ModalState =
 function NameModal({
   title,
   initialName = '',
+  presets,
   onSubmit,
   onClose,
 }: {
   title: string;
   initialName?: string;
+  presets?: string[];
   onSubmit: (name: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -61,9 +87,26 @@ function NameModal({
   return (
     <Modal title={title} onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {presets && (
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setName(p)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  name === p
+                    ? 'bg-brand text-white'
+                    : 'bg-surface-2 text-muted hover:bg-brand-soft hover:text-brand'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
         <TextInput
-          autoFocus
-          placeholder="Nombre"
+          placeholder="Nombre personalizado"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -271,6 +314,7 @@ function DaySection({
   isLast,
   hook,
   byExercise,
+  todayAbbr,
   onOpenAddExercise,
   onOpenEditDay,
   onRegister,
@@ -281,24 +325,33 @@ function DaySection({
   isLast: boolean;
   hook: ReturnType<typeof useRoutines>;
   byExercise: Map<string, WorkoutSet[]> | null;
+  todayAbbr: string;
   onOpenAddExercise: () => void;
   onOpenEditDay: () => void;
   onRegister: (ex: Exercise) => void;
 }) {
+  const isToday = matchesToday(day.name, todayAbbr);
+
   const sorted = useMemo(
     () => [...day.exercises].sort((a, b) => a.order - b.order),
     [day.exercises],
   );
 
-  // Progreso del día: cuántos ejercicios tienen al menos una serie hoy.
+  // Progreso solo para el día de hoy y cuando ya cargaron los datos.
   const dayProgress = useMemo(() => {
-    if (!byExercise || sorted.length === 0) return null;
+    if (!isToday || !byExercise || sorted.length === 0) return null;
     const done = sorted.filter((item) => (byExercise.get(item.exerciseId)?.length ?? 0) > 0).length;
     return { done, total: sorted.length };
-  }, [byExercise, sorted]);
+  }, [isToday, byExercise, sorted]);
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-surface-lowest p-3">
+    <div
+      className={`flex flex-col gap-2 rounded-xl border p-3 transition-colors ${
+        isToday
+          ? 'border-brand/50 bg-brand-soft/20'
+          : 'border-border/60 bg-surface-lowest'
+      }`}
+    >
       {/* Day header */}
       <div className="flex items-center gap-1">
         <div className="flex flex-col gap-0.5">
@@ -321,17 +374,22 @@ function DaySection({
             <ChevronDownIcon className="h-3 w-3" />
           </button>
         </div>
-        <div className="flex flex-1 items-baseline gap-2">
-          <span className="text-sm font-semibold text-fg">{day.name}</span>
+        <div className="flex flex-1 items-center gap-2">
+          <span className={`text-sm font-semibold ${isToday ? 'text-brand' : 'text-fg'}`}>
+            {day.name}
+          </span>
+          {isToday && (
+            <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              hoy
+            </span>
+          )}
           {dayProgress !== null && (
             <span
-              className={`text-xs font-medium tabular ${
-                dayProgress.done === dayProgress.total && dayProgress.total > 0
-                  ? 'text-brand'
-                  : 'text-muted'
+              className={`ml-auto text-xs font-medium tabular ${
+                dayProgress.done === dayProgress.total ? 'text-brand' : 'text-muted'
               }`}
             >
-              {dayProgress.done}/{dayProgress.total} hoy
+              {dayProgress.done}/{dayProgress.total} ✓
             </span>
           )}
         </div>
@@ -359,7 +417,14 @@ function DaySection({
               item={item}
               isFirst={idx === 0}
               isLast={idx === sorted.length - 1}
-              todaySets={byExercise?.get(item.exerciseId)}
+              todaySets={
+                // Solo mostrar estado de hoy en el día que corresponde a hoy.
+                // byExercise null = cargando → undefined (no mostrar nada).
+                // byExercise sin la clave = sin series → [] → "sin series hoy".
+                isToday && byExercise !== null
+                  ? (byExercise.get(item.exerciseId) ?? [])
+                  : undefined
+              }
               onMoveUp={() => hook.moveExerciseUp(routineId, day.id, item.id)}
               onMoveDown={() => hook.moveExerciseDown(routineId, day.id, item.id)}
               onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
@@ -391,6 +456,7 @@ function RoutineCard({
   onToggle,
   hook,
   byExercise,
+  todayAbbr,
   onOpenModal,
   onRegister,
 }: {
@@ -399,6 +465,7 @@ function RoutineCard({
   onToggle: () => void;
   hook: ReturnType<typeof useRoutines>;
   byExercise: Map<string, WorkoutSet[]> | null;
+  todayAbbr: string;
   onOpenModal: (state: ModalState) => void;
   onRegister: (ex: Exercise) => void;
 }) {
@@ -457,6 +524,7 @@ function RoutineCard({
                   isLast={idx === sortedDays.length - 1}
                   hook={hook}
                   byExercise={byExercise}
+                  todayAbbr={todayAbbr}
                   onOpenAddExercise={() =>
                     onOpenModal({ type: 'add-exercise', routineId: routine.id, dayId: day.id })
                   }
@@ -489,6 +557,7 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
   const hook = useRoutines();
   const { routines, status, error, reload } = hook;
   const { byExercise } = useTodaySets();
+  const todayAbbr = useMemo(() => todayWeekdayMVD(), []);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
@@ -539,6 +608,7 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
               onToggle={() => setExpandedId((prev) => (prev === routine.id ? null : routine.id))}
               hook={hook}
               byExercise={byExercise}
+              todayAbbr={todayAbbr}
               onOpenModal={setModal}
               onRegister={onRegister}
             />
@@ -568,6 +638,7 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
       {modal !== null && modal.type === 'add-day' && (
         <NameModal
           title="Nuevo día"
+          presets={WEEKDAY_PRESETS}
           onSubmit={async (name) => {
             await hook.addDay(modal.routineId, name);
           }}
@@ -578,6 +649,7 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
         <NameModal
           title="Renombrar día"
           initialName={modal.day.name}
+          presets={WEEKDAY_PRESETS}
           onSubmit={(name) => hook.editDay(modal.routineId, modal.day.id, name)}
           onClose={closeModal}
         />

@@ -9,6 +9,8 @@ export const MUSCLE_GROUPS = [
   { key: 'antebrazo', label: 'Antebrazo' },
   { key: 'trapecio', label: 'Trapecio' },
   { key: 'piernas', label: 'Piernas' },
+  { key: 'core', label: 'Core' },
+  { key: 'abdominales', label: 'Abdominales' },
 ] as const;
 
 export type MuscleGroupKey = (typeof MUSCLE_GROUPS)[number]['key'];
