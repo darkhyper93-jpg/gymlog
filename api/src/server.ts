@@ -9,6 +9,7 @@ import { authRouter, requireAuth } from './auth';
 import { routinesRouter, routineDaysRouter, routineDayExercisesRouter } from './routines';
 import { achievementsRouter } from './achievements';
 import { exportRouter } from './export';
+import { bodyWeightRouter } from './body-weight';
 import { HttpError } from './http';
 
 const app = express();
@@ -39,6 +40,7 @@ app.use('/routine-days', requireAuth, routineDaysRouter);
 app.use('/routine-day-exercises', requireAuth, routineDayExercisesRouter);
 app.use('/achievements', requireAuth, achievementsRouter);
 app.use('/export', requireAuth, exportRouter);
+app.use('/body-weight', requireAuth, bodyWeightRouter);
 
 // Handler de error central: arma el envelope { success: false, error } con el status correcto.
 // Express 5 propaga el rechazo de las promesas async hasta acá, así que los handlers solo

@@ -16,6 +16,7 @@ export type WorkoutSet = {
   weight: number;
   reps: number;
   rir: number | null;
+  note: string | null;
   createdAt: string;
 };
 
@@ -50,6 +51,16 @@ export type Routine = {
   order: number;
   createdAt: string;
   days: RoutineDay[];
+};
+
+// ─── Peso corporal ────────────────────────────────────────────────────────────
+
+export type BodyWeightEntry = {
+  id: string;
+  userId: string;
+  date: string;
+  weight: number;
+  createdAt: string;
 };
 
 // ─── Logros ───────────────────────────────────────────────────────────────────

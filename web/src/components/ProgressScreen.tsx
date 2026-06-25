@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import type { Exercise, WorkoutSet } from '../types';
 import { useExercises } from '../hooks/useExercises';
+import { useBodyWeight } from '../hooks/useBodyWeight';
 import { localDayKey } from '../hooks/useRegister';
 import { getExerciseSets } from '../api/exercises';
 import { downloadExportCsv } from '../api/export';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
-import { Button, Card, Chip, SectionLabel, Spinner, StateView, TextInput } from './ui';
-import { AlertTriangleIcon, ChevronLeftIcon, DumbbellIcon, TrendingUpIcon, TrophyIcon } from './icons';
+import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView, TextInput } from './ui';
+import { AlertTriangleIcon, ChevronLeftIcon, DumbbellIcon, PlusIcon, TrashIcon, TrendingUpIcon, TrophyIcon } from './icons';
 import { ProgressChart } from './ProgressChart';
 import type { ChartPoint } from './ProgressChart';
 
@@ -62,6 +64,97 @@ function computeChartPoints(sets: WorkoutSet[], metric: Metric): ChartPoint[] {
       return { date, value };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─── Body weight section ──────────────────────────────────────────────────────
+
+function BodyWeightSection() {
+  const { status, entries, addEntry, removeEntry } = useBodyWeight();
+  const [weightInput, setWeightInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const w = Number(weightInput);
+    if (!weightInput || !Number.isFinite(w) || w <= 0) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      const updated = await addEntry({ weight: w });
+      setWeightInput('');
+      if (updated) setFormError(null); // updated silently, no extra msg needed
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'No se pudo guardar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <SectionLabel>Peso corporal</SectionLabel>
+        <span className="text-xs text-muted">{expanded ? '▲' : '▼'}</span>
+      </button>
+
+      {expanded && (
+        <>
+          {/* Última pesada */}
+          {status === 'loading' && <Spinner />}
+          {status === 'error' && (
+            <p className="text-sm text-danger">Error al cargar el historial de peso</p>
+          )}
+          {status === 'ready' && entries.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {entries.slice(0, 10).map((e) => (
+                <div key={e.id} className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 px-3 py-2">
+                  <span className="flex-1 text-sm text-fg tabular">{e.weight} kg</span>
+                  <span className="text-xs text-muted">{formatDate(e.date)}</span>
+                  <button
+                    type="button"
+                    onClick={() => void removeEntry(e.id)}
+                    aria-label="Borrar pesada"
+                    className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {entries.length > 10 && (
+                <p className="text-center text-xs text-muted">Mostrando las últimas 10 pesadas</p>
+              )}
+            </div>
+          )}
+          {status === 'ready' && entries.length === 0 && (
+            <p className="text-sm text-muted">Todavía no registraste tu peso. Empezá con la primera pesada.</p>
+          )}
+
+          {/* Formulario */}
+          <form onSubmit={handleSubmit} className="flex items-end gap-2">
+            <div className="flex-1">
+              <NumberField
+                label="Peso (kg)"
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                placeholder="0.0"
+              />
+            </div>
+            <Button type="submit" disabled={!weightInput || saving} className="shrink-0">
+              <PlusIcon className="h-4 w-4" />
+              {saving ? 'Guardando…' : 'Registrar'}
+            </Button>
+          </form>
+          {formError && <p className="text-sm text-danger">{formError}</p>}
+        </>
+      )}
+    </Card>
+  );
 }
 
 // ─── Exercise selector ────────────────────────────────────────────────────────
@@ -324,12 +417,15 @@ export function ProgressScreen() {
   }
 
   return (
-    <ExerciseSelector
-      exercises={exercises}
-      status={status}
-      error={error}
-      reload={reload}
-      onSelect={setSelected}
-    />
+    <div className="flex flex-col gap-6">
+      <BodyWeightSection />
+      <ExerciseSelector
+        exercises={exercises}
+        status={status}
+        error={error}
+        reload={reload}
+        onSelect={setSelected}
+      />
+    </div>
   );
 }
