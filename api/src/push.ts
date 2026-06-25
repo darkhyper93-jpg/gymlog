@@ -122,7 +122,13 @@ pushRouter.post('/send-daily', async (req, res) => {
 
   const today = todayKeyMVD();
   const subs = await prisma.pushSubscription.findMany({
-    where: { notifyTime: nowMVD, lastSentDate: { not: today } },
+    where: { 
+      notifyTime: nowMVD,
+      OR: [
+        { lastSentDate: { not: today } },
+        { lastSentDate: null }
+      ]
+    },
   });
 
 // 👇 --- REEMPLAZA CON ESTE NUEVO BLOQUE DE DEPURACIÓN --- 👇
