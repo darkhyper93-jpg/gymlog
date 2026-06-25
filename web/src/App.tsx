@@ -10,6 +10,7 @@ import { NavBar, TopNav } from './components/NavBar';
 import { IconButton } from './components/ui';
 import { ChevronLeftIcon, LogOutIcon } from './components/icons';
 import { useAuth } from './hooks/useAuth';
+import { NotificationButton, NotificationModal } from './components/NotificationSettings';
 
 // DECISIÓN: sin router (igual que V1). Con 4 tabs + sub-vista register, un par de estados
 // sigue siendo más simple que añadir react-router a este proyecto pequeño.
@@ -29,6 +30,7 @@ export default function App() {
   const { isAuthed, logout } = useAuth();
   const [tab, setTab] = useState<Tab>('ejercicios');
   const [subView, setSubView] = useState<SubView>(null);
+  const [showNotifs, setShowNotifs] = useState(false);
 
   if (!isAuthed) return <LoginScreen />;
 
@@ -69,9 +71,12 @@ export default function App() {
               <TopNav tab={tab} onChange={handleTabChange} />
             </div>
           )}
-          <IconButton aria-label="Cerrar sesión" onClick={logout} className="ml-auto">
-            <LogOutIcon className="h-5 w-5" />
-          </IconButton>
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationButton onClick={() => setShowNotifs(true)} />
+            <IconButton aria-label="Cerrar sesión" onClick={logout}>
+              <LogOutIcon className="h-5 w-5" />
+            </IconButton>
+          </div>
         </div>
       </header>
 
@@ -96,6 +101,8 @@ export default function App() {
 
       {/* Bottom nav fija en mobile; hidden en desktop (la top nav va en el header) */}
       <NavBar tab={tab} onChange={handleTabChange} />
+
+      {showNotifs && <NotificationModal onClose={() => setShowNotifs(false)} />}
     </div>
   );
 }

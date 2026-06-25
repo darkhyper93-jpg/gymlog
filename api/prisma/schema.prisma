@@ -30,14 +30,29 @@ model Exercise {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  username     String        @unique
-  passwordHash String
-  createdAt    DateTime      @default(now())
-  exercises    Exercise[]
-  routines     Routine[]
-  achievements UserAchievement[]
-  bodyWeights  BodyWeight[]
+  id               String            @id @default(cuid())
+  username         String            @unique
+  passwordHash     String
+  createdAt        DateTime          @default(now())
+  exercises        Exercise[]
+  routines         Routine[]
+  achievements     UserAchievement[]
+  bodyWeights      BodyWeight[]
+  pushSubscription PushSubscription?
+}
+
+model PushSubscription {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String   @unique
+  endpoint     String
+  p256dh       String
+  auth         String
+  // Hora de notificación elegida por el usuario, en formato "HH:MM" (hora Uruguay).
+  notifyTime   String
+  // Último día (YYYY-MM-DD Uruguay) en que se envió la notificación; evita duplicados.
+  lastSentDate String?
+  createdAt    DateTime @default(now())
 }
 
 model UserAchievement {
