@@ -76,9 +76,16 @@ function formatDate(iso: string): string {
   });
 }
 
+function todayLocalStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function BodyWeightSection() {
   const { status, entries, addEntry, removeEntry } = useBodyWeight();
   const [weightInput, setWeightInput] = useState('');
+  const today = useMemo(() => todayLocalStr(), []);
+  const [date, setDate] = useState(today);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -90,9 +97,12 @@ function BodyWeightSection() {
     setSaving(true);
     setFormError(null);
     try {
-      const updated = await addEntry({ weight: w });
+      await addEntry({
+        weight: w,
+        date: date !== today ? `${date}T12:00:00.000-03:00` : undefined,
+      });
       setWeightInput('');
-      if (updated) setFormError(null); // updated silently, no extra msg needed
+      setDate(today);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'No se pudo guardar');
     } finally {
@@ -144,16 +154,28 @@ function BodyWeightSection() {
           )}
 
           {/* Formulario */}
-          <form onSubmit={handleSubmit} className="flex items-end gap-2">
-            <div className="flex-1">
-              <NumberField
-                label="Peso (kg)"
-                value={weightInput}
-                onChange={(e) => setWeightInput(e.target.value)}
-                placeholder="0.0"
-              />
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <NumberField
+                  label="Peso (kg)"
+                  value={weightInput}
+                  onChange={(e) => setWeightInput(e.target.value)}
+                  placeholder="0.0"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-xs font-medium text-muted">Fecha</label>
+                <input
+                  type="date"
+                  value={date}
+                  max={today}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+                />
+              </div>
             </div>
-            <Button type="submit" disabled={!weightInput || saving} className="shrink-0">
+            <Button type="submit" disabled={!weightInput || saving}>
               <PlusIcon className="h-4 w-4" />
               {saving ? 'Guardando…' : 'Registrar'}
             </Button>
