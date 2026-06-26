@@ -46,6 +46,36 @@ function matchesToday(dayName: string, todayAbbr: string): boolean {
   return n === t || n.startsWith(t);
 }
 
+// ─── Selección "qué entrenás hoy" ────────────────────────────────────────────
+
+type TodaySelection = { dayIds: string[] };
+
+// Clave de día en Uruguay: YYYY-MM-DD usando Intl (zona fija UTC-3)
+function todayKeyMVD(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montevideo' }).format(new Date());
+}
+
+const TODAY_SESSION_PREFIX = 'today-session-';
+
+function loadTodaySelection(): TodaySelection | null {
+  try {
+    const raw = localStorage.getItem(TODAY_SESSION_PREFIX + todayKeyMVD());
+    if (!raw) return null;
+    return JSON.parse(raw) as TodaySelection;
+  } catch {
+    return null;
+  }
+}
+
+function saveTodaySelection(sel: TodaySelection | null) {
+  const key = TODAY_SESSION_PREFIX + todayKeyMVD();
+  if (sel === null || sel.dayIds.length === 0) {
+    localStorage.removeItem(key);
+  } else {
+    localStorage.setItem(key, JSON.stringify(sel));
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ModalState =
@@ -54,6 +84,7 @@ type ModalState =
   | { type: 'add-day'; routineId: string }
   | { type: 'edit-day'; routineId: string; day: RoutineDay }
   | { type: 'add-exercise'; routineId: string; dayId: string }
+  | { type: 'today-session' }
   | null;
 
 // ─── NameModal ────────────────────────────────────────────────────────────────
@@ -120,6 +151,106 @@ function NameModal({
           {saving ? 'Guardando…' : 'Guardar'}
         </Button>
       </form>
+    </Modal>
+  );
+}
+
+// ─── TodaySessionModal ────────────────────────────────────────────────────────
+
+function TodaySessionModal({
+  routines,
+  currentSelection,
+  onSave,
+  onClose,
+  onCreateRoutine,
+}: {
+  routines: Routine[];
+  currentSelection: TodaySelection | null;
+  onSave: (sel: TodaySelection | null) => void;
+  onClose: () => void;
+  onCreateRoutine: () => void;
+}) {
+  const [selectedDayIds, setSelectedDayIds] = useState<Set<string>>(
+    new Set(currentSelection?.dayIds ?? []),
+  );
+
+  function toggleDay(dayId: string) {
+    setSelectedDayIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayId)) next.delete(dayId);
+      else next.add(dayId);
+      return next;
+    });
+  }
+
+  function handleSave() {
+    const dayIds = Array.from(selectedDayIds);
+    onSave(dayIds.length > 0 ? { dayIds } : null);
+    onClose();
+  }
+
+  return (
+    <Modal title="¿Qué entrenás hoy?" onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        {routines.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <CalendarIcon className="h-10 w-10 text-muted" />
+            <p className="text-sm text-muted">No tenés rutinas. Creá una primero.</p>
+            <Button onClick={onCreateRoutine} variant="secondary">
+              <PlusIcon className="h-4 w-4" />
+              Crear rutina
+            </Button>
+          </div>
+        ) : (
+          <div className="flex max-h-[55vh] flex-col gap-4 overflow-y-auto">
+            {routines.map((routine) => {
+              const sorted = [...routine.days].sort((a, b) => a.order - b.order);
+              return (
+                <div key={routine.id}>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+                    {routine.name}
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {sorted.map((day) => (
+                      <label
+                        key={day.id}
+                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                          selectedDayIds.has(day.id)
+                            ? 'border-brand bg-brand-soft/20 text-brand'
+                            : 'border-border bg-surface text-fg hover:border-brand/40'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedDayIds.has(day.id)}
+                          onChange={() => toggleDay(day.id)}
+                          className="h-4 w-4 accent-brand"
+                        />
+                        <span className="text-sm font-medium">{day.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button onClick={handleSave} className="flex-1">
+            Guardar selección
+          </Button>
+          {currentSelection !== null && (
+            <Button
+              variant="ghost"
+              onClick={() => { onSave(null); onClose(); }}
+              className="flex-1"
+            >
+              Limpiar
+            </Button>
+          )}
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -313,6 +444,7 @@ function DaySection({
   hook,
   byExercise,
   todayAbbr,
+  todaySelection,
   onOpenAddExercise,
   onOpenEditDay,
   onRegister,
@@ -322,11 +454,15 @@ function DaySection({
   hook: ReturnType<typeof useRoutines>;
   byExercise: Map<string, WorkoutSet[]> | null;
   todayAbbr: string;
+  todaySelection: TodaySelection | null;
   onOpenAddExercise: () => void;
   onOpenEditDay: () => void;
   onRegister: (ex: Exercise) => void;
 }) {
-  const isToday = matchesToday(day.name, todayAbbr);
+  // Si hay selección manual, esa manda; si no, match por nombre de día.
+  const isToday = todaySelection !== null
+    ? todaySelection.dayIds.includes(day.id)
+    : matchesToday(day.name, todayAbbr);
   const [open, setOpen] = useState(isToday);
 
   // Abrir el día cuando se convierte en "hoy" (ej. selección manual), sin forzar el cierre.
@@ -502,6 +638,7 @@ function RoutineCard({
   hook,
   byExercise,
   todayAbbr,
+  todaySelection,
   onOpenModal,
   onRegister,
 }: {
@@ -511,6 +648,7 @@ function RoutineCard({
   hook: ReturnType<typeof useRoutines>;
   byExercise: Map<string, WorkoutSet[]> | null;
   todayAbbr: string;
+  todaySelection: TodaySelection | null;
   onOpenModal: (state: ModalState) => void;
   onRegister: (ex: Exercise) => void;
 }) {
@@ -590,6 +728,7 @@ function RoutineCard({
                       hook={hook}
                       byExercise={byExercise}
                       todayAbbr={todayAbbr}
+                      todaySelection={todaySelection}
                       onOpenAddExercise={() =>
                         onOpenModal({ type: 'add-exercise', routineId: routine.id, dayId: day.id })
                       }
@@ -627,10 +766,28 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
   const todayAbbr = useMemo(() => todayWeekdayMVD(), []);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const [todaySelection, setTodaySelection] = useState<TodaySelection | null>(loadTodaySelection);
 
   function closeModal() {
     setModal(null);
   }
+
+  function handleTodaySelectionSave(sel: TodaySelection | null) {
+    saveTodaySelection(sel);
+    setTodaySelection(sel);
+  }
+
+  // Indicador de selección activa: IDs que aplican hoy
+  const selectionSummary = useMemo(() => {
+    if (!todaySelection) return null;
+    const dayNames: string[] = [];
+    for (const r of routines) {
+      for (const d of r.days) {
+        if (todaySelection.dayIds.includes(d.id)) dayNames.push(d.name);
+      }
+    }
+    return dayNames.join(', ');
+  }, [todaySelection, routines]);
 
   if (status === 'loading') return <Spinner />;
 
@@ -651,13 +808,32 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
 
   return (
     <div className="flex flex-col gap-4">
-      <Button
-        onClick={() => setModal({ type: 'create-routine' })}
-        className="w-full md:ml-auto md:w-auto"
-      >
-        <PlusIcon className="h-5 w-5" />
-        Nueva rutina
-      </Button>
+      {/* Fila de acciones: selector de hoy + nueva rutina */}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => setModal({ type: 'today-session' })}
+          className={`flex flex-1 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
+            todaySelection
+              ? 'border-brand bg-brand-soft/20 text-brand'
+              : 'border-border text-muted hover:border-brand/40 hover:text-fg'
+          }`}
+        >
+          <CalendarIcon className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 truncate">
+            {selectionSummary
+              ? `Hoy: ${selectionSummary}`
+              : '¿Qué entrenás hoy?'}
+          </span>
+        </button>
+        <Button
+          onClick={() => setModal({ type: 'create-routine' })}
+          className="sm:w-auto"
+        >
+          <PlusIcon className="h-5 w-5" />
+          Nueva rutina
+        </Button>
+      </div>
 
       {routines.length === 0 ? (
         <StateView
@@ -676,6 +852,7 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
               hook={hook}
               byExercise={byExercise}
               todayAbbr={todayAbbr}
+              todaySelection={todaySelection}
               onOpenModal={setModal}
               onRegister={onRegister}
             />
@@ -684,6 +861,15 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
       )}
 
       {/* ─── Modals ─── */}
+      {modal !== null && modal.type === 'today-session' && (
+        <TodaySessionModal
+          routines={routines}
+          currentSelection={todaySelection}
+          onSave={handleTodaySelectionSave}
+          onClose={closeModal}
+          onCreateRoutine={() => { setModal({ type: 'create-routine' }); }}
+        />
+      )}
       {modal !== null && modal.type === 'create-routine' && (
         <NameModal
           title="Nueva rutina"
