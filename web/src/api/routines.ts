@@ -33,3 +33,6 @@ export const removeDayExercise = (itemId: string): Promise<{ id: string }> =>
 
 export const reorderDayExercises = (dayId: string, itemIds: string[]): Promise<{ count: number }> =>
   apiRequest<{ count: number }>(`/routine-days/${dayId}/reorder`, { method: 'PATCH', body: { itemIds } });
+
+export const reorderRoutineDays = (routineId: string, dayIds: string[]): Promise<{ count: number }> =>
+  apiRequest<{ count: number }>(`/routines/${routineId}/reorder`, { method: 'PATCH', body: { dayIds } });

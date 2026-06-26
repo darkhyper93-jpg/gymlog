@@ -11,6 +11,7 @@ import {
   addExerciseToDay,
   removeDayExercise,
   reorderDayExercises,
+  reorderRoutineDays,
 } from '../api/routines';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -100,53 +101,26 @@ export function useRoutines() {
     );
   }, []);
 
-  // Intercambia el order de dos días adyacentes (↑). Usa routines de la closure (dep explícita).
-  const moveDayUp = useCallback(
-    async (routineId: string, dayId: string) => {
-      const routine = routines.find((r) => r.id === routineId);
-      if (!routine) return;
-      const sorted = [...routine.days].sort((a, b) => a.order - b.order);
-      const idx = sorted.findIndex((d) => d.id === dayId);
-      if (idx <= 0) return;
-      const [a, b] = [sorted[idx], sorted[idx - 1]];
-      await updateRoutineDay(a.id, { order: b.order });
-      await updateRoutineDay(b.id, { order: a.order });
+  const reorderDays = useCallback(
+    async (routineId: string, dayIds: string[]): Promise<void> => {
       setRoutines((prev) =>
         mapRoutine(prev, routineId, (r) => ({
           ...r,
-          days: r.days.map((d) =>
-            d.id === a.id ? { ...d, order: b.order }
-            : d.id === b.id ? { ...d, order: a.order }
-            : d,
-          ),
+          days: dayIds.reduce<RoutineDay[]>((acc, id, idx) => {
+            const d = r.days.find((day) => day.id === id);
+            if (d) acc.push({ ...d, order: idx });
+            return acc;
+          }, []),
         })),
       );
+      try {
+        await reorderRoutineDays(routineId, dayIds);
+      } catch (e) {
+        void load();
+        throw e;
+      }
     },
-    [routines],
-  );
-
-  const moveDayDown = useCallback(
-    async (routineId: string, dayId: string) => {
-      const routine = routines.find((r) => r.id === routineId);
-      if (!routine) return;
-      const sorted = [...routine.days].sort((a, b) => a.order - b.order);
-      const idx = sorted.findIndex((d) => d.id === dayId);
-      if (idx < 0 || idx >= sorted.length - 1) return;
-      const [a, b] = [sorted[idx], sorted[idx + 1]];
-      await updateRoutineDay(a.id, { order: b.order });
-      await updateRoutineDay(b.id, { order: a.order });
-      setRoutines((prev) =>
-        mapRoutine(prev, routineId, (r) => ({
-          ...r,
-          days: r.days.map((d) =>
-            d.id === a.id ? { ...d, order: b.order }
-            : d.id === b.id ? { ...d, order: a.order }
-            : d,
-          ),
-        })),
-      );
-    },
-    [routines],
+    [load],
   );
 
   // ─── Ejercicios del día ───────────────────────────────────────────────────
@@ -208,8 +182,7 @@ export function useRoutines() {
     addDay,
     editDay,
     removeDay,
-    moveDayUp,
-    moveDayDown,
+    reorderDays,
     addExercise,
     removeExercise,
     reorderExercises,

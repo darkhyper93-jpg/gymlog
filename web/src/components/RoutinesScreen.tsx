@@ -310,8 +310,6 @@ function ExerciseRow({
 function DaySection({
   day,
   routineId,
-  isFirst,
-  isLast,
   hook,
   byExercise,
   todayAbbr,
@@ -321,8 +319,6 @@ function DaySection({
 }: {
   day: RoutineDay;
   routineId: string;
-  isFirst: boolean;
-  isLast: boolean;
   hook: ReturnType<typeof useRoutines>;
   byExercise: Map<string, WorkoutSet[]> | null;
   todayAbbr: string;
@@ -333,10 +329,24 @@ function DaySection({
   const isToday = matchesToday(day.name, todayAbbr);
   const [open, setOpen] = useState(isToday);
 
+  // Abrir el día cuando se convierte en "hoy" (ej. selección manual), sin forzar el cierre.
+  useEffect(() => {
+    if (isToday) setOpen(true);
+  }, [isToday]);
+
+  // Sortable para el drag de días (DndContext padre en RoutineCard)
+  const {
+    attributes: dayAttributes,
+    listeners: dayListeners,
+    setNodeRef: setDayNodeRef,
+    transform: dayTransform,
+    transition: dayTransition,
+    isDragging: isDayDragging,
+  } = useSortable({ id: day.id });
+
   const [localItems, setLocalItems] = useState<RoutineDayExercise[]>(() =>
     [...day.exercises].sort((a, b) => a.order - b.order),
   );
-  // Sync when server data changes (e.g. after reload or external update).
   useEffect(() => {
     setLocalItems([...day.exercises].sort((a, b) => a.order - b.order));
   }, [day.exercises]);
@@ -364,9 +374,18 @@ function DaySection({
     });
   }
 
+  const dayStyle = {
+    transform: CSS.Transform.toString(dayTransform),
+    transition: dayTransition,
+  };
+
   return (
     <div
+      ref={setDayNodeRef}
+      style={dayStyle}
       className={`flex flex-col gap-2 rounded-xl border p-3 transition-colors ${
+        isDayDragging ? 'z-50 opacity-50 shadow-lg' : ''
+      } ${
         isToday
           ? 'border-brand/50 bg-brand-soft/20'
           : 'border-border/60 bg-surface-lowest'
@@ -374,26 +393,17 @@ function DaySection({
     >
       {/* Day header */}
       <div className="flex items-center gap-1">
-        <div className="flex flex-col gap-0.5">
-          <button
-            disabled={isFirst}
-            onClick={() => hook.moveDayUp(routineId, day.id)}
-            aria-label="Subir día"
-            className="flex h-6 w-6 items-center justify-center rounded text-muted transition-colors
-              hover:text-fg disabled:opacity-25"
-          >
-            <ChevronUpIcon className="h-3 w-3" />
-          </button>
-          <button
-            disabled={isLast}
-            onClick={() => hook.moveDayDown(routineId, day.id)}
-            aria-label="Bajar día"
-            className="flex h-6 w-6 items-center justify-center rounded text-muted transition-colors
-              hover:text-fg disabled:opacity-25"
-          >
-            <ChevronDownIcon className="h-3 w-3" />
-          </button>
-        </div>
+        {/* Drag handle de día — separado del botón de plegar para no solaparse */}
+        <button
+          {...dayAttributes}
+          {...dayListeners}
+          aria-label="Arrastrar día"
+          className="flex h-8 w-7 shrink-0 touch-none cursor-grab items-center justify-center
+            rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg
+            active:cursor-grabbing"
+        >
+          <GripVerticalIcon className="h-4 w-4" />
+        </button>
         <button
           type="button"
           aria-expanded={open}
@@ -504,10 +514,27 @@ function RoutineCard({
   onOpenModal: (state: ModalState) => void;
   onRegister: (ex: Exercise) => void;
 }) {
-  const sortedDays = useMemo(
-    () => [...routine.days].sort((a, b) => a.order - b.order),
-    [routine.days],
+  const [localDays, setLocalDays] = useState<RoutineDay[]>(() =>
+    [...routine.days].sort((a, b) => a.order - b.order),
   );
+  useEffect(() => {
+    setLocalDays([...routine.days].sort((a, b) => a.order - b.order));
+  }, [routine.days]);
+
+  const daySensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  function handleDayDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    setLocalDays((curr) => {
+      const oldIdx = curr.findIndex((d) => d.id === active.id);
+      const newIdx = curr.findIndex((d) => d.id === over.id);
+      const next = arrayMove(curr, oldIdx, newIdx);
+      void hook.reorderDays(routine.id, next.map((d) => d.id));
+      return next;
+    });
+  }
 
   return (
     <Card className="overflow-hidden p-0">
@@ -546,30 +573,35 @@ function RoutineCard({
       {/* Expanded body */}
       {isExpanded && (
         <div className="flex flex-col gap-2 border-t border-border px-4 pb-4 pt-3">
-          {sortedDays.length === 0 ? (
+          {localDays.length === 0 ? (
             <p className="py-2 text-center text-sm text-muted">Sin días todavía</p>
           ) : (
-            <div className="flex flex-col gap-2">
-              {sortedDays.map((day, idx) => (
-                <DaySection
-                  key={day.id}
-                  day={day}
-                  routineId={routine.id}
-                  isFirst={idx === 0}
-                  isLast={idx === sortedDays.length - 1}
-                  hook={hook}
-                  byExercise={byExercise}
-                  todayAbbr={todayAbbr}
-                  onOpenAddExercise={() =>
-                    onOpenModal({ type: 'add-exercise', routineId: routine.id, dayId: day.id })
-                  }
-                  onOpenEditDay={() =>
-                    onOpenModal({ type: 'edit-day', routineId: routine.id, day })
-                  }
-                  onRegister={onRegister}
-                />
-              ))}
-            </div>
+            <DndContext sensors={daySensors} onDragEnd={handleDayDragEnd}>
+              <SortableContext
+                items={localDays.map((d) => d.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-2">
+                  {localDays.map((day) => (
+                    <DaySection
+                      key={day.id}
+                      day={day}
+                      routineId={routine.id}
+                      hook={hook}
+                      byExercise={byExercise}
+                      todayAbbr={todayAbbr}
+                      onOpenAddExercise={() =>
+                        onOpenModal({ type: 'add-exercise', routineId: routine.id, dayId: day.id })
+                      }
+                      onOpenEditDay={() =>
+                        onOpenModal({ type: 'edit-day', routineId: routine.id, day })
+                      }
+                      onRegister={onRegister}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
           <button
             onClick={() => onOpenModal({ type: 'add-day', routineId: routine.id })}

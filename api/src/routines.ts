@@ -96,6 +96,36 @@ routinesRouter.delete('/:id', async (req, res) => {
   ok(res, { id });
 });
 
+// PATCH /routines/:id/reorder — reordena los días de la rutina en una transacción
+// Valida propiedad y que dayIds coincida exactamente con los días de la rutina.
+routinesRouter.patch('/:id/reorder', async (req, res) => {
+  const userId = getUserId(req);
+  const { id: routineId } = req.params;
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(b.dayIds) || b.dayIds.some((d) => typeof d !== 'string')) {
+    throw new HttpError(400, 'dayIds debe ser un array de strings');
+  }
+  const dayIds = b.dayIds as string[];
+
+  const routine = await prisma.routine.findFirst({
+    where: { id: routineId, userId },
+    include: { days: { select: { id: true } } },
+  });
+  if (!routine) throw new HttpError(404, 'Rutina no encontrada');
+
+  const routineDayIds = new Set(routine.days.map((d) => d.id));
+  if (dayIds.length !== routineDayIds.size || dayIds.some((id) => !routineDayIds.has(id))) {
+    throw new HttpError(400, 'dayIds no coincide con los días de la rutina');
+  }
+
+  await prisma.$transaction(
+    dayIds.map((id, idx) =>
+      prisma.routineDay.update({ where: { id }, data: { order: idx } }),
+    ),
+  );
+  ok(res, { count: dayIds.length });
+});
+
 // POST /routines/:id/days — agregar un día a la rutina { name }
 routinesRouter.post('/:id/days', async (req, res) => {
   const userId = getUserId(req);
