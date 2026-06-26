@@ -1,5 +1,5 @@
 import type { Tab } from '../App';
-import { CalendarIcon, DumbbellIcon, TrendingUpIcon, TrophyIcon } from './icons';
+import { CalendarIcon, DumbbellIcon, FlameIcon, TrendingUpIcon, TrophyIcon } from './icons';
 import type { ComponentType, SVGProps } from 'react';
 
 type NavItem = {
@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'rutinas', label: 'Rutinas', Icon: CalendarIcon },
   { key: 'progreso', label: 'Progreso', Icon: TrendingUpIcon },
   { key: 'logros', label: 'Logros', Icon: TrophyIcon },
+  { key: 'macros', label: 'Macros', Icon: FlameIcon },
 ];
 
 type NavBarProps = { tab: Tab; onChange: (t: Tab) => void };
