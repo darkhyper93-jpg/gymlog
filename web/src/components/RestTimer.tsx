@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState, useRef } from 'react';
+import { useRestTimer } from '../timer/RestTimerContext';
 import { GripVerticalIcon, PauseIcon, PlayIcon, RotateCcwIcon, XIcon } from './icons';
 
 const PRESETS = [60, 90, 120, 180] as const;
 
 const STORAGE_KEY = 'rest-timer-pos';
 
-// Posición por defecto: pegado al bottom de la pantalla, centrado.
 const DEFAULT_POS = { x: 0, y: 0 };
 
 function loadPos(): { x: number; y: number } {
@@ -18,7 +18,6 @@ function loadPos(): { x: number; y: number } {
   return DEFAULT_POS;
 }
 
-// Anillo de progreso SVG. viewBox 56×56, radio 24, grosor 4 → sin recorte en los bordes.
 const RING_R = 24;
 const CIRCUMFERENCE = 2 * Math.PI * RING_R;
 
@@ -41,17 +40,8 @@ function Ring({ progress, done }: { progress: number; done: boolean }) {
   );
 }
 
-export function RestTimer({
-  initialSeconds,
-  onClose,
-}: {
-  initialSeconds: number;
-  onClose: () => void;
-}) {
-  const [total, setTotal] = useState(initialSeconds);
-  const [remaining, setRemaining] = useState(initialSeconds);
-  const [running, setRunning] = useState(true);
-  const vibratedRef = useRef(false);
+export function RestTimer() {
+  const { remaining, total, running, active, pause, resume, adjust, preset, close } = useRestTimer();
 
   // ─── Posición arrastrable ────────────────────────────────────────────────────
   const [pos, setPos] = useState<{ x: number; y: number }>(loadPos);
@@ -65,12 +55,10 @@ export function RestTimer({
     const h = el.offsetHeight;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // El timer está posicionado desde bottom-center, así que x=0 = centrado.
-    // translateX desplaza desde el centro; translateY desplaza hacia arriba (negativo = arriba).
     const minX = -(vw / 2 - w / 2);
     const maxX = vw / 2 - w / 2;
-    const minY = -(vh - h - 80); // no sale por arriba de la pantalla
-    const maxY = 0;              // no baja del punto base
+    const minY = -(vh - h - 80);
+    const maxY = 0;
     return { x: Math.max(minX, Math.min(maxX, x)), y: Math.max(minY, Math.min(maxY, y)) };
   }
 
@@ -101,47 +89,7 @@ export function RestTimer({
     localStorage.removeItem(STORAGE_KEY);
   }
 
-  // ─── Lógica del timer ────────────────────────────────────────────────────────
-
-  // Tick
-  useEffect(() => {
-    if (!running || remaining <= 0) return;
-    const id = setInterval(() => setRemaining((r) => r - 1), 1000);
-    return () => clearInterval(id);
-  }, [running, remaining]);
-
-  // Vibrar + detener al llegar a 0
-  useEffect(() => {
-    if (remaining === 0 && !vibratedRef.current) {
-      vibratedRef.current = true;
-      setRunning(false);
-      if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-    }
-  }, [remaining]);
-
-  const preset = useCallback((secs: number) => {
-    setTotal(secs);
-    setRemaining(secs);
-    setRunning(true);
-    vibratedRef.current = false;
-  }, []);
-
-  const adjust = useCallback((delta: number) => {
-    setRemaining((r) => {
-      const next = Math.max(0, r + delta);
-      if (next > 0) {
-        setRunning(true);
-        vibratedRef.current = false;
-      }
-      return next;
-    });
-  }, []);
-
-  const reset = useCallback(() => {
-    setRemaining(total);
-    setRunning(true);
-    vibratedRef.current = false;
-  }, [total]);
+  if (!active) return null;
 
   const done = remaining === 0;
   const progress = total > 0 ? remaining / total : 0;
@@ -168,7 +116,7 @@ export function RestTimer({
       >
         {/* Fila principal */}
         <div className="flex items-center gap-3 px-2 py-3">
-          {/* Drag handle — para mover el timer sin interferir con scroll */}
+          {/* Drag handle */}
           <div
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -196,17 +144,17 @@ export function RestTimer({
 
           {/* Controles principales */}
           <button
-            onClick={() => setRunning((r) => !r)}
+            onClick={() => (running ? pause() : resume())}
             aria-label={running ? 'Pausar' : 'Reanudar'}
             disabled={done}
             className={btnBase}
           >
             {running ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
           </button>
-          <button onClick={reset} aria-label="Reiniciar cuenta" className={btnBase}>
+          <button onClick={() => preset(total)} aria-label="Reiniciar cuenta" className={btnBase}>
             <RotateCcwIcon className="h-4 w-4" />
           </button>
-          <button onClick={onClose} aria-label="Cerrar timer" className={btnBase}>
+          <button onClick={close} aria-label="Cerrar timer" className={btnBase}>
             <XIcon className="h-4 w-4" />
           </button>
         </div>
@@ -224,7 +172,6 @@ export function RestTimer({
           <button onClick={() => adjust(15)} className={presetBase}>
             +15s
           </button>
-          {/* Volver al centro — solo visible si el timer fue movido */}
           {(pos.x !== 0 || pos.y !== 0) && (
             <button
               onClick={resetPosition}

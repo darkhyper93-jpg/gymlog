@@ -5,7 +5,7 @@ import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
 import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
-import { RestTimer } from './RestTimer';
+import { useRestTimer } from '../timer/RestTimerContext';
 import { Toast } from './Toast';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -16,16 +16,19 @@ import { CSS } from '@dnd-kit/utilities';
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
 export function RegisterScreen({ exercise }: { exercise: Exercise }) {
   const { status, error, todaySets, reference, reload, addSet, removeSet, editSet, reorderTodaySets } = useRegister(exercise.id);
-  const [timerSecs, setTimerSecs] = useState<number | null>(null);
+  const timer = useRestTimer();
   const [toast, setToast] = useState<string | null>(null);
 
   const handleAddSet = useCallback(
-    async (input: { weight: number; reps: number; rir?: number; date?: string; note?: string }) => {
+    async (input: { weight: number; reps: number; rir?: number; date?: string; note?: string; isLastSet?: boolean }) => {
       const { weightPR, oneRmPR, achievements } = await addSet(input);
-      if (exercise.restSeconds != null && exercise.restSeconds > 0) {
-        setTimerSecs(exercise.restSeconds);
+      // El SetForm decide qué duración pasar según "última serie"
+      if (input.isLastSet) {
+        const between = loadRestBetweenExercises();
+        if (between > 0) timer.start(between);
+      } else if (exercise.restSeconds != null && exercise.restSeconds > 0) {
+        timer.start(exercise.restSeconds);
       }
-      // Prioridad: logro nuevo > PR de 1RM > PR de peso.
       if (achievements.length > 0) {
         setToast(`Logro: ${achievements[0].title}`);
       } else if (oneRmPR) {
@@ -34,7 +37,7 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
         setToast('¡Nuevo récord de peso!');
       }
     },
-    [addSet, exercise.restSeconds],
+    [addSet, exercise.restSeconds, timer],
   );
 
   return (
@@ -93,9 +96,6 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
             <SetForm prefill={pickPrefill(todaySets, reference?.sets ?? [])} onAdd={handleAddSet} />
           </Card>
         </>
-      )}
-      {timerSecs !== null && (
-        <RestTimer initialSeconds={timerSecs} onClose={() => setTimerSecs(null)} />
       )}
       {toast !== null && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
@@ -387,6 +387,28 @@ function SetText({ set }: { set: WorkoutSet }) {
   );
 }
 
+// ─── Descanso entre ejercicios (Feature 2) ───────────────────────────────────
+
+const REST_BETWEEN_KEY = 'rest-between-exercises';
+const REST_BETWEEN_DEFAULT = 180;
+
+export function loadRestBetweenExercises(): number {
+  try {
+    const raw = localStorage.getItem(REST_BETWEEN_KEY);
+    if (raw !== null) {
+      const n = Number(raw);
+      if (Number.isInteger(n) && n > 0) return n;
+    }
+  } catch { /* noop */ }
+  return REST_BETWEEN_DEFAULT;
+}
+
+export function saveRestBetweenExercises(seconds: number) {
+  localStorage.setItem(REST_BETWEEN_KEY, String(seconds));
+}
+
+// ─── Helpers locales ─────────────────────────────────────────────────────────
+
 // Devuelve 'YYYY-MM-DD' en el timezone del dispositivo (que debe ser Uruguay).
 function todayLocalStr(): string {
   const d = new Date();
@@ -398,7 +420,7 @@ function SetForm({
   onAdd,
 }: {
   prefill: { weight: string; reps: string; rir: string };
-  onAdd: (input: { weight: number; reps: number; rir?: number; date?: string; note?: string }) => Promise<void>;
+  onAdd: (input: { weight: number; reps: number; rir?: number; date?: string; note?: string; isLastSet?: boolean }) => Promise<void>;
 }) {
   const [weight, setWeight] = useState(prefill.weight);
   const [reps, setReps] = useState(prefill.reps);
@@ -407,6 +429,7 @@ function SetForm({
   const [date, setDate] = useState(today);
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
+  const [isLastSet, setIsLastSet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -426,13 +449,10 @@ function SetForm({
         weight: Number(weight),
         reps: Number(reps),
         rir: rir === '' ? undefined : Number(rir),
-        // Si la fecha no es hoy, enviamos mediodía en hora Uruguay para que el backend
-        // la agrupe correctamente (UTC-3 fijo, sin DST).
         date: date !== today ? `${date}T12:00:00.000-03:00` : undefined,
         note: note.trim() || undefined,
+        isLastSet,
       });
-      // Dejo los valores cargados como prefill de la próxima serie (para superar/repetir rápido).
-      // Resetear solo nota y fecha; peso/reps/rir se quedan para encadenar.
       setNote('');
       setShowNote(false);
       setDate(today);
@@ -475,6 +495,16 @@ function SetForm({
           className="rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
         />
       </div>
+      {/* Última serie — usa descanso entre ejercicios en vez del descanso entre series */}
+      <label className="flex cursor-pointer items-center gap-3">
+        <input
+          type="checkbox"
+          checked={isLastSet}
+          onChange={(e) => setIsLastSet(e.target.checked)}
+          className="h-4 w-4 accent-brand"
+        />
+        <span className="text-sm text-fg">Última serie de este ejercicio</span>
+      </label>
       {showNote ? (
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">Nota (opcional)</label>

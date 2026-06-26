@@ -5,6 +5,7 @@ import { RegisterScreen } from './components/RegisterScreen';
 import { RoutinesScreen } from './components/RoutinesScreen';
 import { ProgressScreen } from './components/ProgressScreen';
 import { AchievementsScreen } from './components/AchievementsScreen';
+import { MacrosScreen } from './components/MacrosScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { NavBar, TopNav } from './components/NavBar';
 import { IconButton } from './components/ui';
@@ -13,16 +14,19 @@ import { useAuth } from './hooks/useAuth';
 import { NotificationButton, NotificationModal } from './components/NotificationSettings';
 import { useIosInstall } from './hooks/useIosInstall';
 import { IosInstallModal } from './components/IosInstallModal';
+import { RestTimerProvider } from './timer/RestTimerContext';
+import { RestTimer } from './components/RestTimer';
 
-// DECISIÓN: sin router (igual que V1). Con 4 tabs + sub-vista register, un par de estados
+// DECISIÓN: sin router (igual que V1). Con 5 tabs + sub-vista register, un par de estados
 // sigue siendo más simple que añadir react-router a este proyecto pequeño.
-export type Tab = 'ejercicios' | 'rutinas' | 'progreso' | 'logros';
+export type Tab = 'ejercicios' | 'rutinas' | 'progreso' | 'logros' | 'macros';
 
 const TAB_LABELS: Record<Tab, string> = {
   ejercicios: 'Tus ejercicios',
   rutinas: 'Tus rutinas',
   progreso: 'Tu progreso',
   logros: 'Tus logros',
+  macros: 'Macros y agua',
 };
 
 // Sub-vista register: se abre desde Ejercicios o desde un día de rutina; el botón ← vuelve.
@@ -51,7 +55,9 @@ export default function App() {
       ? 'max-w-md md:max-w-4xl'
       : 'max-w-md';
 
+
   return (
+    <RestTimerProvider>
     <div className="flex min-h-full w-full flex-col">
       {/* Header fijo: wordmark + top nav en desktop + logout.
           DECISIÓN: el header siempre usa max-w-4xl en desktop, independiente del wideClass
@@ -109,16 +115,22 @@ export default function App() {
           />
         ) : tab === 'progreso' ? (
           <ProgressScreen />
-        ) : (
+        ) : tab === 'logros' ? (
           <AchievementsScreen />
+        ) : (
+          <MacrosScreen />
         )}
       </main>
 
       {/* Bottom nav fija en mobile; hidden en desktop (la top nav va en el header) */}
       <NavBar tab={tab} onChange={handleTabChange} />
 
+      {/* Timer global — visible en cualquier pantalla */}
+      <RestTimer />
+
       {showNotifs && <NotificationModal onClose={() => setShowNotifs(false)} />}
       {showIosInstall && <IosInstallModal onClose={() => setShowIosInstall(false)} />}
     </div>
+    </RestTimerProvider>
   );
 }
