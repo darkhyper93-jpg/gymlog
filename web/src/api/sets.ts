@@ -38,3 +38,7 @@ export function deleteSet(id: string): Promise<{ id: string }> {
 export function updateSet(id: string, input: UpdateSetInput): Promise<WorkoutSet> {
   return apiRequest<WorkoutSet>(`/sets/${id}`, { method: 'PATCH', body: input });
 }
+
+export function reorderSets(setIds: string[]): Promise<{ count: number }> {
+  return apiRequest<{ count: number }>('/sets/reorder', { method: 'PATCH', body: { setIds } });
+}

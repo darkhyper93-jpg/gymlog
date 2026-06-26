@@ -117,7 +117,7 @@ setsRouter.get('/today', async (req, res) => {
   const { start, end } = dayBoundsMVD(new Date());
   const sets = await prisma.workoutSet.findMany({
     where: { exercise: { userId }, date: { gte: start, lt: end } },
-    orderBy: { date: 'asc' },
+    orderBy: [{ order: 'asc' }, { date: 'asc' }],
   });
   ok(res, sets);
 });
@@ -137,7 +137,16 @@ setsRouter.post('/', async (req, res) => {
   const prevBest1RM =
     prevSets.length > 0 ? Math.max(...prevSets.map((s) => est1RM(s.weight, s.reps))) : null;
 
-  const set = await prisma.workoutSet.create({ data });
+  // order = max order de las series de HOY para este ejercicio + 1 (0 si no hay).
+  const { start: todayStart, end: todayEnd } = dayBoundsMVD(data.date ? new Date(data.date) : new Date());
+  const lastToday = await prisma.workoutSet.findFirst({
+    where: { exerciseId: data.exerciseId, date: { gte: todayStart, lt: todayEnd } },
+    orderBy: { order: 'desc' },
+    select: { order: true },
+  });
+  const order = (lastToday?.order ?? -1) + 1;
+
+  const set = await prisma.workoutSet.create({ data: { ...data, order } });
 
   const weightPR = prevMaxWeight === null || set.weight > prevMaxWeight;
   const oneRmPR = prevBest1RM === null || est1RM(set.weight, set.reps) > prevBest1RM;
@@ -148,6 +157,34 @@ setsRouter.post('/', async (req, res) => {
   const achievements = await unlockNewAchievements(userId, stats);
 
   ok(res, { set, prs: { weightPR, oneRmPR }, achievements }, 201);
+});
+
+// PATCH /sets/reorder — reordena series del usuario en una transacción.
+// Valida ownership transitivo de cada serie: set → exercise → userId.
+setsRouter.patch('/reorder', async (req, res) => {
+  const userId = getUserId(req);
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(b.setIds) || b.setIds.some((id) => typeof id !== 'string')) {
+    throw new HttpError(400, 'setIds debe ser un array de strings');
+  }
+  const setIds = b.setIds as string[];
+  if (setIds.length === 0) throw new HttpError(400, 'setIds no puede estar vacío');
+
+  // Verificar que todas las series pertenecen al usuario (ownership transitivo).
+  const owned = await prisma.workoutSet.findMany({
+    where: { id: { in: setIds }, exercise: { userId } },
+    select: { id: true },
+  });
+  if (owned.length !== setIds.length) {
+    throw new HttpError(403, 'Una o más series no pertenecen al usuario');
+  }
+
+  await prisma.$transaction(
+    setIds.map((id, idx) =>
+      prisma.workoutSet.update({ where: { id }, data: { order: idx } }),
+    ),
+  );
+  ok(res, { count: setIds.length });
 });
 
 // DELETE /sets/:id — borra una serie del usuario.

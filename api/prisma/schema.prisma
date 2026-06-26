@@ -75,6 +75,7 @@ model WorkoutSet {
   reps       Int
   rir        Int?
   note       String?
+  order      Int      @default(0)
   createdAt  DateTime @default(now())
 }
 

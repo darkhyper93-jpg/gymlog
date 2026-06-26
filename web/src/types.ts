@@ -17,6 +17,7 @@ export type WorkoutSet = {
   reps: number;
   rir: number | null;
   note: string | null;
+  order: number;
   createdAt: string;
 };
 

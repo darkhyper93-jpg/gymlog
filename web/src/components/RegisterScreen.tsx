@@ -1,17 +1,21 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
-import { AlertTriangleIcon, CheckCircleIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
+import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
 import { RestTimer } from './RestTimer';
 import { Toast } from './Toast';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // Pantalla "registrar hoy": el corazón del V1. Muestra objetivo + última vez para superar,
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
 export function RegisterScreen({ exercise }: { exercise: Exercise }) {
-  const { status, error, todaySets, reference, reload, addSet, removeSet, editSet } = useRegister(exercise.id);
+  const { status, error, todaySets, reference, reload, addSet, removeSet, editSet, reorderTodaySets } = useRegister(exercise.id);
   const [timerSecs, setTimerSecs] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -75,11 +79,12 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
                   : 'Primera vez con este ejercicio. ¡Arrancá cargando tu primera serie!'}
               </p>
             ) : (
-              <ol className="flex flex-col gap-2">
-                {todaySets.map((s, i) => (
-                  <SetRow key={s.id} index={i + 1} set={s} onDelete={removeSet} onEdit={editSet} />
-                ))}
-              </ol>
+              <SortableSetList
+                sets={todaySets}
+                onDelete={removeSet}
+                onEdit={editSet}
+                onReorder={reorderTodaySets}
+              />
             )}
           </section>
 
@@ -94,6 +99,77 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
       )}
       {toast !== null && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
+  );
+}
+
+// ─── Lista de series de hoy, reordenable por arrastre ────────────────────────
+
+function SortableSetList({
+  sets,
+  onDelete,
+  onEdit,
+  onReorder,
+}: {
+  sets: WorkoutSet[];
+  onDelete: (id: string) => Promise<void>;
+  onEdit: (id: string, input: { weight?: number; reps?: number; rir?: number | null; note?: string | null }) => Promise<void>;
+  onReorder: (orderedIds: string[]) => Promise<void>;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  // localOrder tracks the display order; syncs from sets when sets change externally.
+  const [localOrder, setLocalOrder] = useState<string[]>(() => sets.map((s) => s.id));
+
+  // Sync when sets array changes (new add, delete, reload).
+  useEffect(() => {
+    setLocalOrder(sets.map((s) => s.id));
+  }, [sets]);
+
+  // Only confirmed sets are draggable; temp- sets stay in place.
+  const draggableIds = useMemo(
+    () => sets.filter((s) => !s.id.startsWith('temp-')).map((s) => s.id),
+    [sets],
+  );
+
+  const ordered = useMemo(() => {
+    const byId = new Map(sets.map((s) => [s.id, s]));
+    return localOrder.reduce<WorkoutSet[]>((acc, id) => {
+      const s = byId.get(id);
+      if (s) acc.push(s);
+      return acc;
+    }, []);
+  }, [sets, localOrder]);
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    setLocalOrder((curr) => {
+      const oldIdx = curr.indexOf(String(active.id));
+      const newIdx = curr.indexOf(String(over.id));
+      if (oldIdx === -1 || newIdx === -1) return curr;
+      const next = arrayMove(curr, oldIdx, newIdx);
+      void onReorder(next.filter((id) => !id.startsWith('temp-')));
+      return next;
+    });
+  }
+
+  return (
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <SortableContext items={draggableIds} strategy={verticalListSortingStrategy}>
+        <ol className="flex flex-col gap-2">
+          {ordered.map((s, i) => (
+            <SetRow
+              key={s.id}
+              index={i + 1}
+              set={s}
+              onDelete={onDelete}
+              onEdit={onEdit}
+            />
+          ))}
+        </ol>
+      </SortableContext>
+    </DndContext>
   );
 }
 
@@ -137,6 +213,10 @@ function SetRow({
   onEdit: (id: string, input: { weight?: number; reps?: number; rir?: number | null; note?: string | null }) => Promise<void>;
 }) {
   const pending = set.id.startsWith('temp-');
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: set.id,
+    disabled: pending,
+  });
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -188,9 +268,15 @@ function SetRow({
 
   const busy = pending || deleting || saving;
 
+  const dragStyle = { transform: CSS.Transform.toString(transform), transition };
+
   if (editing) {
     return (
-      <li className="flex flex-col gap-3 rounded-xl border border-brand/40 bg-surface px-4 py-3">
+      <li
+        ref={setNodeRef}
+        style={dragStyle}
+        className="flex flex-col gap-3 rounded-xl border border-brand/40 bg-surface px-4 py-3"
+      >
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-sm font-bold text-brand tabular">
             {index}
@@ -236,10 +322,22 @@ function SetRow({
 
   return (
     <li
-      className={`flex flex-col gap-1 rounded-xl border border-border bg-surface px-4 py-3
-        ${busy ? 'opacity-60' : ''}`}
+      ref={setNodeRef}
+      style={dragStyle}
+      className={`flex flex-col gap-1 rounded-xl border border-border bg-surface px-3 py-3
+        ${busy ? 'opacity-60' : ''} ${isDragging ? 'z-50 opacity-50 shadow-lg' : ''}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {/* Drag handle — oculto en series temp- */}
+        <button
+          {...(pending ? {} : { ...attributes, ...listeners })}
+          aria-label="Arrastrar serie"
+          disabled={pending}
+          className="flex h-8 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded
+            text-muted transition-colors hover:text-fg active:cursor-grabbing disabled:invisible"
+        >
+          <GripVerticalIcon className="h-4 w-4" />
+        </button>
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft
             text-sm font-bold text-brand tabular"
@@ -274,7 +372,7 @@ function SetRow({
         )}
       </div>
       {set.note && (
-        <p className="ml-12 text-xs text-muted italic">{set.note}</p>
+        <p className="ml-16 text-xs text-muted italic">{set.note}</p>
       )}
     </li>
   );

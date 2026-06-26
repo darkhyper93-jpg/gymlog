@@ -128,6 +128,36 @@ routineDaysRouter.patch('/:dayId', async (req, res) => {
   ok(res, updated);
 });
 
+// PATCH /routine-days/:dayId/reorder — reordena ejercicios del día en una transacción
+// Valida propiedad transitiva y que itemIds coincida exactamente con los ejercicios del día.
+routineDaysRouter.patch('/:dayId/reorder', async (req, res) => {
+  const userId = getUserId(req);
+  const { dayId } = req.params;
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(b.itemIds) || b.itemIds.some((id) => typeof id !== 'string')) {
+    throw new HttpError(400, 'itemIds debe ser un array de strings');
+  }
+  const itemIds = b.itemIds as string[];
+
+  const day = await prisma.routineDay.findFirst({
+    where: { id: dayId, routine: { userId } },
+    include: { exercises: { select: { id: true } } },
+  });
+  if (!day) throw new HttpError(404, 'Día no encontrado');
+
+  const dayItemIds = new Set(day.exercises.map((e) => e.id));
+  if (itemIds.length !== dayItemIds.size || itemIds.some((id) => !dayItemIds.has(id))) {
+    throw new HttpError(400, 'itemIds no coincide con los ejercicios del día');
+  }
+
+  await prisma.$transaction(
+    itemIds.map((id, idx) =>
+      prisma.routineDayExercise.update({ where: { id }, data: { order: idx } }),
+    ),
+  );
+  ok(res, { count: itemIds.length });
+});
+
 // DELETE /routine-days/:dayId — borra el día (ítems caen por cascade)
 routineDaysRouter.delete('/:dayId', async (req, res) => {
   const userId = getUserId(req);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Exercise, Routine, RoutineDay, RoutineDayExercise, WorkoutSet } from '../types';
 import { useRoutines } from '../hooks/useRoutines';
@@ -12,10 +12,15 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   DumbbellIcon,
+  GripVerticalIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
 } from './icons';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ─── Días de la semana ────────────────────────────────────────────────────────
 
@@ -230,49 +235,44 @@ function TodayStatus({ sets }: { sets: WorkoutSet[] | undefined }) {
 
 function ExerciseRow({
   item,
-  isFirst,
-  isLast,
   todaySets,
-  onMoveUp,
-  onMoveDown,
   onRemove,
   onRegister,
 }: {
   item: RoutineDayExercise;
-  isFirst: boolean;
-  isLast: boolean;
   todaySets: WorkoutSet[] | undefined;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   onRemove: () => void;
   onRegister: (ex: Exercise) => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-surface px-3 py-2.5">
-      {/* Reorder */}
-      <div className="flex flex-col gap-0.5">
-        <button
-          disabled={isFirst}
-          onClick={onMoveUp}
-          aria-label="Subir ejercicio"
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors
-            hover:bg-surface-2 hover:text-fg disabled:opacity-25"
-        >
-          <ChevronUpIcon className="h-3.5 w-3.5" />
-        </button>
-        <button
-          disabled={isLast}
-          onClick={onMoveDown}
-          aria-label="Bajar ejercicio"
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors
-            hover:bg-surface-2 hover:text-fg disabled:opacity-25"
-        >
-          <ChevronDownIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 rounded-xl border border-border/60 bg-surface px-3 py-2.5 ${
+        isDragging ? 'z-50 opacity-50 shadow-lg' : ''
+      }`}
+    >
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Arrastrar ejercicio"
+        className="flex h-7 w-7 shrink-0 touch-none cursor-grab items-center justify-center rounded-lg
+          text-muted transition-colors hover:bg-surface-2 hover:text-fg active:cursor-grabbing"
+      >
+        <GripVerticalIcon className="h-4 w-4" />
+      </button>
       {/* Name + group + target + today status */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="break-words text-sm font-semibold leading-tight text-fg">
+        <span className="text-sm font-semibold leading-tight text-fg">
           {item.exercise.name}
         </span>
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0">
@@ -290,7 +290,7 @@ function ExerciseRow({
           className="whitespace-nowrap rounded-lg border border-border px-2.5 py-1.5 text-xs
             font-semibold text-muted transition-colors hover:border-brand hover:text-brand"
         >
-          Registrar hoy
+          Registrar
         </button>
         <button
           onClick={onRemove}
@@ -333,17 +333,36 @@ function DaySection({
   const isToday = matchesToday(day.name, todayAbbr);
   const [open, setOpen] = useState(isToday);
 
-  const sorted = useMemo(
-    () => [...day.exercises].sort((a, b) => a.order - b.order),
-    [day.exercises],
+  const [localItems, setLocalItems] = useState<RoutineDayExercise[]>(() =>
+    [...day.exercises].sort((a, b) => a.order - b.order),
+  );
+  // Sync when server data changes (e.g. after reload or external update).
+  useEffect(() => {
+    setLocalItems([...day.exercises].sort((a, b) => a.order - b.order));
+  }, [day.exercises]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // Progreso solo para el día de hoy y cuando ya cargaron los datos.
   const dayProgress = useMemo(() => {
-    if (!isToday || !byExercise || sorted.length === 0) return null;
-    const done = sorted.filter((item) => (byExercise.get(item.exerciseId)?.length ?? 0) > 0).length;
-    return { done, total: sorted.length };
-  }, [isToday, byExercise, sorted]);
+    if (!isToday || !byExercise || localItems.length === 0) return null;
+    const done = localItems.filter(
+      (item) => (byExercise.get(item.exerciseId)?.length ?? 0) > 0,
+    ).length;
+    return { done, total: localItems.length };
+  }, [isToday, byExercise, localItems]);
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    setLocalItems((curr) => {
+      const oldIdx = curr.findIndex((i) => i.id === active.id);
+      const newIdx = curr.findIndex((i) => i.id === over.id);
+      const next = arrayMove(curr, oldIdx, newIdx);
+      void hook.reorderExercises(routineId, day.id, next.map((i) => i.id));
+      return next;
+    });
+  }
 
   return (
     <div
@@ -420,32 +439,32 @@ function DaySection({
 
       {open && (
         <>
-          {/* Exercises list */}
-          {sorted.length === 0 ? (
+          {/* Exercises list — sortable by drag */}
+          {localItems.length === 0 ? (
             <p className="py-1.5 text-center text-xs text-muted">Sin ejercicios todavía</p>
           ) : (
-            <div className="flex flex-col gap-1.5">
-              {sorted.map((item, idx) => (
-                <ExerciseRow
-                  key={item.id}
-                  item={item}
-                  isFirst={idx === 0}
-                  isLast={idx === sorted.length - 1}
-                  todaySets={
-                    // Solo mostrar estado de hoy en el día que corresponde a hoy.
-                    // byExercise null = cargando → undefined (no mostrar nada).
-                    // byExercise sin la clave = sin series → [] → "sin series hoy".
-                    isToday && byExercise !== null
-                      ? (byExercise.get(item.exerciseId) ?? [])
-                      : undefined
-                  }
-                  onMoveUp={() => hook.moveExerciseUp(routineId, day.id, item.id)}
-                  onMoveDown={() => hook.moveExerciseDown(routineId, day.id, item.id)}
-                  onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
-                  onRegister={onRegister}
-                />
-              ))}
-            </div>
+            <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={localItems.map((i) => i.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-col gap-1.5">
+                  {localItems.map((item) => (
+                    <ExerciseRow
+                      key={item.id}
+                      item={item}
+                      todaySets={
+                        isToday && byExercise !== null
+                          ? (byExercise.get(item.exerciseId) ?? [])
+                          : undefined
+                      }
+                      onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
+                      onRegister={onRegister}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
 
           {/* Add exercise */}

@@ -30,3 +30,6 @@ export const updateDayExercise = (itemId: string, order: number): Promise<Routin
 
 export const removeDayExercise = (itemId: string): Promise<{ id: string }> =>
   apiRequest<{ id: string }>(`/routine-day-exercises/${itemId}`, { method: 'DELETE' });
+
+export const reorderDayExercises = (dayId: string, itemIds: string[]): Promise<{ count: number }> =>
+  apiRequest<{ count: number }>(`/routine-days/${dayId}/reorder`, { method: 'PATCH', body: { itemIds } });

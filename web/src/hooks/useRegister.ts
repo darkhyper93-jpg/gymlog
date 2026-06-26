@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Achievement, WorkoutSet } from '../types';
 import { getExerciseSets } from '../api/exercises';
-import { createSet, deleteSet, updateSet } from '../api/sets';
+import { createSet, deleteSet, updateSet, reorderSets } from '../api/sets';
 import type { UpdateSetInput } from '../api/sets';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -87,6 +87,7 @@ export function useRegister(exerciseId: string) {
         reps: input.reps,
         rir: input.rir ?? null,
         note: input.note ?? null,
+        order: 0,
         createdAt: new Date().toISOString(),
       };
       // Solo agregar optimistamente a todaySets si la serie es de hoy.
@@ -150,5 +151,27 @@ export function useRegister(exerciseId: string) {
     [todaySets],
   );
 
-  return { status, error, todaySets, reference, reload: load, addSet, removeSet, editSet };
+  // Reordena todaySets optimistamente; salta las series temp- (no confirmadas).
+  const reorderTodaySets = useCallback(
+    async (orderedIds: string[]): Promise<void> => {
+      const prev = todaySets;
+      setTodaySets((current) => {
+        const byId = new Map(current.map((s) => [s.id, s]));
+        return orderedIds.reduce<WorkoutSet[]>((acc, id) => {
+          const s = byId.get(id);
+          if (s) acc.push(s);
+          return acc;
+        }, []);
+      });
+      try {
+        await reorderSets(orderedIds);
+      } catch (e) {
+        setTodaySets(prev);
+        throw e;
+      }
+    },
+    [todaySets],
+  );
+
+  return { status, error, todaySets, reference, reload: load, addSet, removeSet, editSet, reorderTodaySets };
 }
