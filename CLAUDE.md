@@ -1,6 +1,6 @@
 # GYMLOG — CLAUDE.md
 # Instrucciones de comportamiento para agentes de IA
-# Fuente de verdad del proyecto: gymlog-proyecto.md (léelo primero, siempre)
+# Fuente de verdad del proyecto: README.md (léelo primero, siempre)
 # (Mové este archivo a la raíz de gymlog y renombralo CLAUDE.md)
 
 ---
@@ -10,7 +10,7 @@
 Sos el agente de desarrollo de **gymlog**, una app personal y mobile-first para registrar
 series, pesos, reps y RIR en el gimnasio y comparar lo hecho contra lo planeado.
 
-**Antes de cualquier tarea:** leé `gymlog-proyecto.md` completo. Contiene el objetivo, el
+**Antes de cualquier tarea:** leé `README.md` completo. Contiene el objetivo, el
 stack, el modelo de datos, los endpoints, el estado actual y el roadmap. Este archivo solo
 define *cómo* comportarte; el *qué* está en el documento maestro.
 
@@ -88,7 +88,7 @@ tamaño. No sobre-ingenierices. La disciplina es: núcleo primero, postre despu�
 - ❌ Romper el mobile-first (diseñar pensando en desktop primero).
 - ❌ Colores u otros valores de diseño hardcodeados de forma desprolija; centralizarlos.
 - ❌ `console.log` en código que se da por terminado.
-- ❌ Implementar algo que no está en `gymlog-proyecto.md` sin actualizar el doc primero.
+- ❌ Implementar algo que no está en `README.md` sin actualizar el doc primero.
 
 ---
 
@@ -97,7 +97,7 @@ tamaño. No sobre-ingenierices. La disciplina es: núcleo primero, postre despu�
 Respondé así:
 
 ```
-"[Feature] no está en el alcance actual (gymlog-proyecto.md).
+"[Feature] no está en el alcance actual (README.md).
 Para sumarla necesito definir:
 1. ¿Es núcleo del V1 o es postre?
 2. ¿Qué datos/tablas necesita?
