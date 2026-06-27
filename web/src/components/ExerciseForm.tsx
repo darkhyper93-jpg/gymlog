@@ -35,8 +35,10 @@ export function ExerciseForm({
     try {
       const parsedRest = restSeconds.trim() !== '' ? parseInt(restSeconds, 10) : null;
       await onSubmit({
+        // Mandamos siempre la clave (incluso vacía) para poder LIMPIAR el objetivo al editar:
+        // con `undefined`, JSON.stringify la omite y el backend nunca recibe el cambio.
         name: name.trim(),
-        target: target.trim() || undefined,
+        target: target.trim(),
         muscleGroup,
         restSeconds: parsedRest,
       });

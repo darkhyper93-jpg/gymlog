@@ -27,7 +27,7 @@ function isMuscleGroup(value: unknown): value is MuscleGroup {
 }
 
 type CreateExerciseBody = { name: string; target?: string; muscleGroup: MuscleGroup; restSeconds?: number };
-type UpdateExerciseBody = { name?: string; target?: string; muscleGroup?: MuscleGroup; restSeconds?: number | null };
+type UpdateExerciseBody = { name?: string; target?: string | null; muscleGroup?: MuscleGroup; restSeconds?: number | null };
 
 // Valida el body de creación. Tira HttpError 400 si el input externo no cierra.
 function parseCreateBody(body: unknown): CreateExerciseBody {
@@ -69,8 +69,9 @@ function parseUpdateBody(body: unknown): UpdateExerciseBody {
     if (b.target !== null && typeof b.target !== 'string') {
       throw new HttpError(400, 'target debe ser texto');
     }
-    // target vacío o null limpia el objetivo
-    data.target = typeof b.target === 'string' && b.target.trim() !== '' ? b.target.trim() : undefined;
+    // target vacío o null limpia el objetivo: usamos null (no undefined), porque Prisma
+    // interpreta undefined como "no tocar el campo" y el objetivo viejo quedaría pegado.
+    data.target = typeof b.target === 'string' && b.target.trim() !== '' ? b.target.trim() : null;
   }
   if (b.muscleGroup !== undefined) {
     if (!isMuscleGroup(b.muscleGroup)) {
