@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
   type MacrosProfile,
@@ -294,13 +294,6 @@ export function MacrosScreen() {
     if (entries.length === 0) return null;
     return entries[0].weight;
   }, [entries]);
-
-  // Sincronizar peso del perfil con el peso corporal más reciente si aún no hay perfil
-  useEffect(() => {
-    if (!profile && latestWeight !== null) {
-      // No auto-guardar: el usuario va a completar el formulario
-    }
-  }, [profile, latestWeight]);
 
   function handleSave(p: MacrosProfile) {
     saveMacrosProfile(p);
