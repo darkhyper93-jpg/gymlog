@@ -6,6 +6,7 @@ import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
 import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
 import { useRestTimer } from '../timer/RestTimerContext';
+import { todayKeyMVD } from '../time';
 import { Toast } from './Toast';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -409,12 +410,6 @@ export function saveRestBetweenExercises(seconds: number) {
 
 // ─── Helpers locales ─────────────────────────────────────────────────────────
 
-// Devuelve 'YYYY-MM-DD' en el timezone del dispositivo (que debe ser Uruguay).
-function todayLocalStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 function SetForm({
   prefill,
   onAdd,
@@ -425,7 +420,7 @@ function SetForm({
   const [weight, setWeight] = useState(prefill.weight);
   const [reps, setReps] = useState(prefill.reps);
   const [rir, setRir] = useState(prefill.rir);
-  const today = useMemo(() => todayLocalStr(), []);
+  const today = useMemo(() => todayKeyMVD(), []);
   const [date, setDate] = useState(today);
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);

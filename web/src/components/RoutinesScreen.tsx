@@ -21,6 +21,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { todayKeyMVD } from '../time';
 
 // ─── Días de la semana ────────────────────────────────────────────────────────
 
@@ -49,11 +50,6 @@ function matchesToday(dayName: string, todayAbbr: string): boolean {
 // ─── Selección "qué entrenás hoy" ────────────────────────────────────────────
 
 type TodaySelection = { dayIds: string[] };
-
-// Clave de día en Uruguay: YYYY-MM-DD usando Intl (zona fija UTC-3)
-function todayKeyMVD(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montevideo' }).format(new Date());
-}
 
 const TODAY_SESSION_PREFIX = 'today-session-';
 

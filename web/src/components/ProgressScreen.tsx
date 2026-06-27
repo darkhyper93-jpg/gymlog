@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import type { Exercise, WorkoutSet } from '../types';
 import { useExercises } from '../hooks/useExercises';
 import { useBodyWeight } from '../hooks/useBodyWeight';
-import { localDayKey } from '../hooks/useRegister';
+import { localDayKeyMVD, todayKeyMVD } from '../time';
 import { getExerciseSets } from '../api/exercises';
 import { downloadExportCsv } from '../api/export';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
@@ -46,7 +46,7 @@ function computePRs(sets: WorkoutSet[]) {
 function computeChartPoints(sets: WorkoutSet[], metric: Metric): ChartPoint[] {
   const byDay = new Map<string, WorkoutSet[]>();
   for (const s of sets) {
-    const key = localDayKey(s.date);
+    const key = localDayKeyMVD(new Date(s.date));
     const bucket = byDay.get(key);
     if (bucket) bucket.push(s);
     else byDay.set(key, [s]);
@@ -76,15 +76,10 @@ function formatDate(iso: string): string {
   });
 }
 
-function todayLocalStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 function BodyWeightSection() {
   const { status, entries, addEntry, removeEntry } = useBodyWeight();
   const [weightInput, setWeightInput] = useState('');
-  const today = useMemo(() => todayLocalStr(), []);
+  const today = useMemo(() => todayKeyMVD(), []);
   const [date, setDate] = useState(today);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);

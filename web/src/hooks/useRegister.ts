@@ -3,25 +3,11 @@ import type { Achievement, WorkoutSet } from '../types';
 import { getExerciseSets } from '../api/exercises';
 import { createSet, deleteSet, updateSet, reorderSets } from '../api/sets';
 import type { UpdateSetInput } from '../api/sets';
+import { localDayKeyMVD, todayKeyMVD } from '../time';
 
 type Status = 'loading' | 'error' | 'ready';
 
 export type DaySession = { dayKey: string; date: string; sets: WorkoutSet[] };
-
-// Clave de día en horario local (no UTC) para agrupar series por sesión.
-// DECISIÓN: agrupamos por día local porque entrenar es un evento local; usar UTC
-// partiría una sesión nocturna en dos días.
-export function localDayKey(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function todayKey(): string {
-  return localDayKey(new Date().toISOString());
-}
 
 // Hook del corazón del V1: trae el historial del ejercicio y lo separa en
 // "series de hoy" y "última sesión a superar" (la más reciente que no sea hoy).
@@ -36,11 +22,14 @@ export function useRegister(exerciseId: string) {
     setError(null);
     try {
       const history = await getExerciseSets(exerciseId); // más nuevo primero
-      const today = todayKey();
+      const today = todayKeyMVD();
       const mine: WorkoutSet[] = [];
       const groups = new Map<string, DaySession>();
+      // DECISIÓN: agrupamos por día en hora de Uruguay (no UTC ni la zona del device);
+      // entrenar es un evento local y usar UTC partiría una sesión nocturna en dos días.
+      // La zona fija UY hace que el agrupado coincida con el backend (/sets/today).
       for (const set of history) {
-        const key = localDayKey(set.date);
+        const key = localDayKeyMVD(new Date(set.date));
         if (key === today) {
           mine.push(set);
           continue;
@@ -79,7 +68,7 @@ export function useRegister(exerciseId: string) {
       note?: string;
     }): Promise<{ weightPR: boolean; oneRmPR: boolean; achievements: Achievement[] }> => {
       const setDate = input.date ?? new Date().toISOString();
-      const isToday = localDayKey(setDate) === todayKey();
+      const isToday = localDayKeyMVD(new Date(setDate)) === todayKeyMVD();
       const temp: WorkoutSet = {
         id: `temp-${Date.now()}`,
         exerciseId,
