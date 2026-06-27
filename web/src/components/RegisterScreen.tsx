@@ -5,7 +5,7 @@ import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
 import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
-import { useRestTimer } from '../timer/RestTimerContext';
+import { useRestTimerActions } from '../timer/restTimerContexts';
 import { todayKeyMVD } from '../time';
 import { Toast } from './Toast';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -17,7 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
 export function RegisterScreen({ exercise }: { exercise: Exercise }) {
   const { status, error, todaySets, reference, reload, addSet, removeSet, editSet, reorderTodaySets } = useRegister(exercise.id);
-  const timer = useRestTimer();
+  const timer = useRestTimerActions();
   const [toast, setToast] = useState<string | null>(null);
 
   const handleAddSet = useCallback(

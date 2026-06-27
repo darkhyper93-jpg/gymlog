@@ -1,5 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import {
+  RestTimerActionsContext,
+  RestTimerStateContext,
+  type TimerActions,
+  type TimerStateValue,
+} from './restTimerContexts';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -36,29 +42,6 @@ function loadState(): TimerState | null {
   }
 }
 
-// ─── Contexto ─────────────────────────────────────────────────────────────────
-
-type TimerCtx = {
-  remaining: number;
-  total: number;
-  running: boolean;
-  active: boolean;
-  start: (seconds: number) => void;
-  pause: () => void;
-  resume: () => void;
-  adjust: (delta: number) => void;
-  preset: (seconds: number) => void;
-  close: () => void;
-};
-
-const RestTimerContext = createContext<TimerCtx | null>(null);
-
-export function useRestTimer(): TimerCtx {
-  const ctx = useContext(RestTimerContext);
-  if (!ctx) throw new Error('useRestTimer must be used inside RestTimerProvider');
-  return ctx;
-}
-
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function RestTimerProvider({ children }: { children: ReactNode }) {
@@ -81,7 +64,11 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!timerState || !timerState.running || timerState.paused) return;
     const id = setInterval(() => {
-      setRemaining(Math.max(0, Math.round((timerState.endsAt - Date.now()) / 1000)));
+      const rem = Math.max(0, Math.round((timerState.endsAt - Date.now()) / 1000));
+      setRemaining(rem);
+      // O4: al llegar a 0 no hay nada más que contar; cortar el interval evita
+      // re-renders innecesarios mientras el descanso queda terminado.
+      if (rem === 0) clearInterval(id);
     }, 500);
     return () => clearInterval(id);
   }, [timerState]);
@@ -207,9 +194,24 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
   const running = timerState?.running ?? false;
   const total = timerState?.total ?? 0;
 
+  // Estable: todas las acciones son useCallback con deps vacías → identidad fija.
+  // Así los consumidores de acciones (RegisterScreen) no re-renderizan por tick.
+  const actions = useMemo<TimerActions>(
+    () => ({ start, pause, resume, adjust, preset, close }),
+    [start, pause, resume, adjust, preset, close],
+  );
+
+  // Volátil: cambia con remaining (cada tick) y con el estado del timer.
+  const state = useMemo<TimerStateValue>(
+    () => ({ remaining, total, running, active }),
+    [remaining, total, running, active],
+  );
+
   return (
-    <RestTimerContext.Provider value={{ remaining, total, running, active, start, pause, resume, adjust, preset, close }}>
-      {children}
-    </RestTimerContext.Provider>
+    <RestTimerActionsContext.Provider value={actions}>
+      <RestTimerStateContext.Provider value={state}>
+        {children}
+      </RestTimerStateContext.Provider>
+    </RestTimerActionsContext.Provider>
   );
 }

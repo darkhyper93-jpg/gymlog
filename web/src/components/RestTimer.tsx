@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useRestTimer } from '../timer/RestTimerContext';
+import { useRestTimerActions, useRestTimerState } from '../timer/restTimerContexts';
 import { GripVerticalIcon, PauseIcon, PlayIcon, RotateCcwIcon, XIcon } from './icons';
 
 const PRESETS = [60, 90, 120, 180] as const;
@@ -41,7 +41,8 @@ function Ring({ progress, done }: { progress: number; done: boolean }) {
 }
 
 export function RestTimer() {
-  const { remaining, total, running, active, pause, resume, adjust, preset, close } = useRestTimer();
+  const { remaining, total, running, active } = useRestTimerState();
+  const { pause, resume, adjust, preset, close } = useRestTimerActions();
 
   // ─── Posición arrastrable ────────────────────────────────────────────────────
   const [pos, setPos] = useState<{ x: number; y: number }>(loadPos);
