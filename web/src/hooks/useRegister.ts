@@ -51,8 +51,9 @@ export function useRegister(exerciseId: string) {
       }
       // history viene desc, así que el primer grupo no-hoy es la última sesión previa.
       const ref = groups.size > 0 ? [...groups.values()][0] : null;
-      // Las series de hoy las quiero más viejo→más nuevo (orden en que las cargué).
-      mine.reverse();
+      // Las series de hoy se muestran según el orden manual persistido (campo `order`), con
+      // desempate por fecha para datos viejos previos al reorden (todos con order = 0).
+      mine.sort((a, b) => a.order - b.order || (a.date < b.date ? -1 : 1));
       setTodaySets(mine);
       setReference(ref);
       setStatus('ready');
