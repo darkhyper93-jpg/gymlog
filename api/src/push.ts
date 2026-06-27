@@ -83,11 +83,11 @@ pushRouter.delete('/subscribe', requireAuth, async (req, res) => {
 // Verifica CRON_SECRET para que no lo llame cualquiera.
 // Busca usuarios cuya notifyTime coincide con la hora Uruguay actual y que tengan rutina hoy.
 pushRouter.post('/send-daily', async (req, res) => {
+  // Sin CRON_SECRET el endpoint quedaría abierto a cualquiera: lo cerramos en vez de
+  // ejecutar sin verificar. Para usarlo hay que configurar la env y mandar el header.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const provided = req.headers['x-cron-secret'];
-    if (provided !== secret) throw new HttpError(401, 'No autorizado');
-  }
+  if (!secret) throw new HttpError(503, 'CRON_SECRET no configurado');
+  if (req.headers['x-cron-secret'] !== secret) throw new HttpError(401, 'No autorizado');
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
     ok(res, { sent: 0, reason: 'VAPID no configurado' });
@@ -127,9 +127,13 @@ pushRouter.post('/send-daily', async (req, res) => {
         data: { lastSentDate: today },
       });
       sent++;
-    } catch {
-      // Si el endpoint expiró, lo eliminamos para no acumular basura.
-      await prisma.pushSubscription.delete({ where: { id: sub.id } });
+    } catch (err: unknown) {
+      // Solo borrar si el endpoint ya no existe (404) o expiró/fue revocado (410).
+      // Un fallo transitorio (timeout, 500) NO debe desuscribir al usuario para siempre.
+      const code = (err as { statusCode?: number }).statusCode;
+      if (code === 404 || code === 410) {
+        await prisma.pushSubscription.delete({ where: { id: sub.id } });
+      }
     }
   }
 
