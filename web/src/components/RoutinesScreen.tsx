@@ -69,6 +69,11 @@ function loadTodaySelection(): TodaySelection | null {
 
 function saveTodaySelection(sel: TodaySelection | null) {
   const key = TODAY_SESSION_PREFIX + todayKeyMVD();
+  // Limpiar selecciones de días anteriores: se acumulaba una clave por día sin borrarse nunca.
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(TODAY_SESSION_PREFIX) && k !== key) localStorage.removeItem(k);
+  }
   if (sel === null || sel.dayIds.length === 0) {
     localStorage.removeItem(key);
   } else {
