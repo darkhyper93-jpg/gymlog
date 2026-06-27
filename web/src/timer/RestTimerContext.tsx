@@ -102,8 +102,10 @@ export function RestTimerProvider({ children }: { children: ReactNode }) {
     if (remaining === 0 && timerState && !notifiedRef.current) {
       notifiedRef.current = true;
       if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-      // Notificación solo si el permiso ya está concedido (se reutiliza el del push)
-      if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      // Notificación solo si el permiso ya está concedido (se reutiliza el del push).
+      // Guard de 'Notification': en iOS Safari < 16.4 / WebViews la API no existe y
+      // tocar Notification.permission lanzaría ReferenceError dentro del efecto.
+      if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then((reg) => {
           void reg.showNotification('¡Descanso terminado! 💪', {
             body: 'Ya podés arrancar la próxima serie.',
