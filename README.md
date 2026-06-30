@@ -150,6 +150,11 @@ RoutineDay (día dentro de una rutina) [V2]
 RoutineDayExercise (ejercicio asignado a un día de rutina) [V2]
 · id, routineDayId, exerciseId, order
 · exercise — Exercise embebido (include del backend)
+· plannedSets  Int?    — series planeadas [importar-rutinas]
+· plannedReps  String? — reps como texto, conserva rangos "8-10" [importar-rutinas]
+· plannedRir   String? — RIR objetivo como texto "1-2" [importar-rutinas]
+· restSeconds  Int?    — descanso entre series en segundos, override por ítem [importar-rutinas]
+· note         String? — aclaración del ejercicio (tempo, "drop set"…) [importar-rutinas]
 
 UserAchievement (logro desbloqueado) [V2]
 · id, userId, key (clave del logro estático en achievements.ts), unlockedAt
@@ -188,6 +193,10 @@ Rutinas [V2]:
 · POST   /routine-days/:dayId/exercises    — agrega ejercicio al día { exerciseId }
 · PATCH  /routine-day-exercises/:itemId    — reordena item { order }
 · DELETE /routine-day-exercises/:itemId    — quita ejercicio del día
+
+Importar rutinas [importar-rutinas]:
+· POST   /import/parse         — extrae texto de archivo o texto pegado, llama a Gemini y devuelve preview JSON (NO guarda nada)
+· POST   /import/commit        — persiste la rutina confirmada en transacción (dedup ejercicios, crea rutina+días+ítems con plan)
 
 Logros [V2]:
 · GET    /achievements         — todas las defs + estado desbloqueado del usuario
@@ -346,6 +355,11 @@ V2 COMPLETO (rama v2-postre, 2026-06-24). Pendiente: merge a main + deploy manua
   local (reutiliza localDayKey de useRegister). 3 métricas: Top set (peso máximo del día),
   Volumen (Σ weight×reps), 1RM estimado (máximo del día). ProgressScreen: selector de
   ejercicio con búsqueda + detalle con PR cards + toggle de métrica + gráfico.
+· [importar-rutinas] Parseo con LLM: Google Gemini (gemini-2.5-flash) vía REST directo con
+  fetch nativo (Node 24) — sin SDK, fiel al espíritu "app chica". Key solo en el backend
+  (GEMINI_API_KEY), nunca en el frontend. Modelo B2: campos planeados en RoutineDayExercise
+  (todos nullable, sin pérdida de datos). Dedup de ejercicios por nombre case-insensitive,
+  scopeado por userId. El preview es humano antes de crear nada — nada se guarda sin confirmación.
 
 
 ══════════════════════════════════════════════════════════════════════════════
@@ -372,6 +386,8 @@ B) Backend (Render → Web Service, raíz: api/)
        DIRECT_URL    = (Supabase, conexión directa puerto 5432) — la usa db push en el build
        JWT_SECRET    = (valor largo y aleatorio, distinto al de dev)
        CORS_ORIGIN   = (la URL pública del frontend, ej. https://gymlog-web.onrender.com)
+       GEMINI_API_KEY = (key de Google AI Studio — https://aistudio.google.com/apikey)
+                        Obligatoria para /import/parse. Sin ella el endpoint devuelve 503.
      PORT lo inyecta Render solo.
 
 C) Frontend (Render → Static Site, raíz: web/)
