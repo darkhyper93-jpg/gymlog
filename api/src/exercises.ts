@@ -3,33 +3,28 @@ import { prisma } from './db';
 import { getUserId } from './auth';
 import { HttpError, ok } from './http';
 import { dayBoundsMVD } from './time';
+import { getAllowedMuscleGroups, normalizeMg } from './muscle-groups';
 
 export const exercisesRouter = Router();
 
-// Grupos musculares permitidos (lista fija). Claves sin acento para guardar prolijo;
-// el label lindo lo arma el frontend. Si crece, mover a una tabla.
-const MUSCLE_GROUPS = [
-  'espalda',
-  'hombro',
-  'pecho',
-  'piernas',
-  'triceps',
-  'biceps',
-  'antebrazo',
-  'trapecio',
-  'core',
-  'abdominales',
-] as const;
-type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
+type CreateExerciseBody = { name: string; target?: string; muscleGroup: string; restSeconds?: number };
+type UpdateExerciseBody = { name?: string; target?: string | null; muscleGroup?: string; restSeconds?: number | null };
 
-function isMuscleGroup(value: unknown): value is MuscleGroup {
-  return typeof value === 'string' && (MUSCLE_GROUPS as readonly string[]).includes(value);
+// Valida que el muscleGroup pedido esté en el conjunto permitido (built-in ∪ custom del
+// usuario), comparando case-insensitive, y devuelve el valor canónico guardado (la key
+// built-in tal cual o el name custom tal cual existe en DB) para no persistir variantes
+// de capitalización.
+async function resolveMuscleGroup(userId: string, value: string): Promise<string> {
+  const allowed = await getAllowedMuscleGroups(userId);
+  const normalized = normalizeMg(value);
+  for (const candidate of allowed) {
+    if (normalizeMg(candidate) === normalized) return candidate;
+  }
+  throw new HttpError(400, 'muscleGroup inválido');
 }
 
-type CreateExerciseBody = { name: string; target?: string; muscleGroup: MuscleGroup; restSeconds?: number };
-type UpdateExerciseBody = { name?: string; target?: string | null; muscleGroup?: MuscleGroup; restSeconds?: number | null };
-
 // Valida el body de creación. Tira HttpError 400 si el input externo no cierra.
+// El muscleGroup se valida contra built-in ∪ custom en el handler (necesita el userId).
 function parseCreateBody(body: unknown): CreateExerciseBody {
   const b = (body ?? {}) as Record<string, unknown>;
   if (typeof b.name !== 'string' || b.name.trim() === '') {
@@ -38,8 +33,8 @@ function parseCreateBody(body: unknown): CreateExerciseBody {
   if (b.target !== undefined && b.target !== null && typeof b.target !== 'string') {
     throw new HttpError(400, 'target debe ser texto');
   }
-  if (!isMuscleGroup(b.muscleGroup)) {
-    throw new HttpError(400, `muscleGroup es requerido y debe ser uno de: ${MUSCLE_GROUPS.join(', ')}`);
+  if (typeof b.muscleGroup !== 'string' || b.muscleGroup.trim() === '') {
+    throw new HttpError(400, 'muscleGroup es requerido y debe ser texto');
   }
   const result: CreateExerciseBody = {
     name: b.name.trim(),
@@ -74,8 +69,8 @@ function parseUpdateBody(body: unknown): UpdateExerciseBody {
     data.target = typeof b.target === 'string' && b.target.trim() !== '' ? b.target.trim() : null;
   }
   if (b.muscleGroup !== undefined) {
-    if (!isMuscleGroup(b.muscleGroup)) {
-      throw new HttpError(400, `muscleGroup debe ser uno de: ${MUSCLE_GROUPS.join(', ')}`);
+    if (typeof b.muscleGroup !== 'string' || b.muscleGroup.trim() === '') {
+      throw new HttpError(400, 'muscleGroup debe ser texto no vacío');
     }
     data.muscleGroup = b.muscleGroup;
   }
@@ -114,7 +109,8 @@ exercisesRouter.get('/', async (req, res) => {
 exercisesRouter.post('/', async (req, res) => {
   const userId = getUserId(req);
   const data = parseCreateBody(req.body);
-  const exercise = await prisma.exercise.create({ data: { ...data, userId } });
+  const muscleGroup = await resolveMuscleGroup(userId, data.muscleGroup);
+  const exercise = await prisma.exercise.create({ data: { ...data, muscleGroup, userId } });
   ok(res, exercise, 201);
 });
 
@@ -125,6 +121,9 @@ exercisesRouter.patch('/:id', async (req, res) => {
   const data = parseUpdateBody(req.body);
   const existing = await prisma.exercise.findFirst({ where: { id, userId } });
   if (!existing) throw new HttpError(404, 'Ejercicio no encontrado');
+  if (data.muscleGroup !== undefined) {
+    data.muscleGroup = await resolveMuscleGroup(userId, data.muscleGroup);
+  }
   const exercise = await prisma.exercise.update({ where: { id }, data });
   ok(res, exercise);
 });

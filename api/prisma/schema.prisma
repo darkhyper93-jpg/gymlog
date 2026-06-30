@@ -39,6 +39,17 @@ model User {
   achievements     UserAchievement[]
   bodyWeights      BodyWeight[]
   pushSubscription PushSubscription?
+  muscleGroups     MuscleGroup[]
+}
+
+model MuscleGroup {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model PushSubscription {
