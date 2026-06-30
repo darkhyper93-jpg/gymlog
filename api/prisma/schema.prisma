@@ -114,4 +114,11 @@ model RoutineDayExercise {
   exercise     Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   exerciseId   String
   order        Int        @default(0)
+  // Plan por ítem (lo que la rutina dice para ESTE ejercicio en ESTE día).
+  // Todos opcionales: se importan si aparecen, si no quedan null. Base de "planeado vs real".
+  plannedSets  Int?     // cantidad de series (de "4x8-10" → 4)
+  plannedReps  String?  // reps como texto, conserva rangos (de "4x8-10" → "8-10")
+  plannedRir   String?  // RIR objetivo como texto, conserva rangos (de "RIR 1-2" → "1-2")
+  restSeconds  Int?     // descanso entre series en segundos, override por ítem
+  note         String?  // aclaración (tempo, técnica, "drop set", etc.)
 }
