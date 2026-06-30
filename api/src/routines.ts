@@ -235,14 +235,102 @@ routineDaysRouter.post('/:dayId/exercises', async (req, res) => {
 
 // ─── Ítems de ejercicio (/routine-day-exercises) ──────────────────────────────
 
-// PATCH /routine-day-exercises/:itemId — reordenar { order }
+type ItemPatchBody = {
+  order?: number;
+  plannedSets?: number | null;
+  plannedReps?: string | null;
+  plannedRir?: string | null;
+  restSeconds?: number | null;
+  note?: string | null;
+};
+
+// Valida el body del PATCH de ítem: order (reorder) y/o el plan del ítem. Todos opcionales,
+// pero exige al menos uno presente. null limpia un campo de plan.
+function parseItemPatchBody(body: unknown): ItemPatchBody {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const data: ItemPatchBody = {};
+  let any = false;
+
+  if (b.order !== undefined) {
+    if (typeof b.order !== 'number' || !Number.isInteger(b.order)) {
+      throw new HttpError(400, 'order debe ser un entero');
+    }
+    data.order = b.order;
+    any = true;
+  }
+  if (b.plannedSets !== undefined) {
+    any = true;
+    if (b.plannedSets === null) {
+      data.plannedSets = null;
+    } else if (
+      typeof b.plannedSets !== 'number' ||
+      !Number.isInteger(b.plannedSets) ||
+      b.plannedSets < 1 ||
+      b.plannedSets > 30
+    ) {
+      throw new HttpError(400, 'plannedSets debe ser un entero entre 1 y 30, o null');
+    } else {
+      data.plannedSets = b.plannedSets;
+    }
+  }
+  if (b.plannedReps !== undefined) {
+    any = true;
+    if (b.plannedReps === null) {
+      data.plannedReps = null;
+    } else if (typeof b.plannedReps !== 'string' || b.plannedReps.trim() === '') {
+      throw new HttpError(400, 'plannedReps debe ser texto no vacío, o null');
+    } else {
+      data.plannedReps = b.plannedReps.trim();
+    }
+  }
+  if (b.plannedRir !== undefined) {
+    any = true;
+    if (b.plannedRir === null) {
+      data.plannedRir = null;
+    } else if (typeof b.plannedRir !== 'string' || b.plannedRir.trim() === '') {
+      throw new HttpError(400, 'plannedRir debe ser texto no vacío, o null');
+    } else {
+      data.plannedRir = b.plannedRir.trim();
+    }
+  }
+  if (b.restSeconds !== undefined) {
+    any = true;
+    if (b.restSeconds === null) {
+      data.restSeconds = null;
+    } else if (
+      typeof b.restSeconds !== 'number' ||
+      !Number.isInteger(b.restSeconds) ||
+      b.restSeconds < 0 ||
+      b.restSeconds > 3600
+    ) {
+      throw new HttpError(400, 'restSeconds debe ser un entero entre 0 y 3600, o null');
+    } else {
+      data.restSeconds = b.restSeconds;
+    }
+  }
+  if (b.note !== undefined) {
+    any = true;
+    if (b.note === null) {
+      data.note = null;
+    } else if (typeof b.note !== 'string') {
+      throw new HttpError(400, 'note debe ser texto, o null');
+    } else {
+      data.note = b.note.trim() === '' ? null : b.note.trim();
+    }
+  }
+
+  if (!any) {
+    throw new HttpError(400, 'Hay que enviar al menos un campo (order, plannedSets, plannedReps, plannedRir, restSeconds o note)');
+  }
+  return data;
+}
+
+// PATCH /routine-day-exercises/:itemId — reordenar { order } y/o editar el plan del ítem
+// { plannedSets, plannedReps, plannedRir, restSeconds, note }
 routineDayExercisesRouter.patch('/:itemId', async (req, res) => {
   const userId = getUserId(req);
   const { itemId } = req.params;
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  if (typeof b.order !== 'number' || !Number.isInteger(b.order)) {
-    throw new HttpError(400, 'order debe ser un entero');
-  }
+  const data = parseItemPatchBody(req.body);
   // Verificar dueño transitivo: item → day → routine → userId
   const item = await prisma.routineDayExercise.findFirst({
     where: { id: itemId, day: { routine: { userId } } },
@@ -250,7 +338,7 @@ routineDayExercisesRouter.patch('/:itemId', async (req, res) => {
   if (!item) throw new HttpError(404, 'Ítem no encontrado');
   const updated = await prisma.routineDayExercise.update({
     where: { id: itemId },
-    data: { order: b.order },
+    data,
     include: { exercise: true },
   });
   ok(res, updated);
