@@ -12,6 +12,8 @@ import {
   removeDayExercise,
   reorderDayExercises,
   reorderRoutineDays,
+  updateDayExercise,
+  type ItemPlanPatch,
 } from '../api/routines';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -171,6 +173,19 @@ export function useRoutines() {
     [load],
   );
 
+  const editItemPlan = useCallback(
+    async (routineId: string, dayId: string, itemId: string, patch: ItemPlanPatch) => {
+      const updated = await updateDayExercise(itemId, patch);
+      setRoutines((prev) =>
+        mapDay(prev, routineId, dayId, (d) => ({
+          ...d,
+          exercises: d.exercises.map((e) => (e.id === itemId ? updated : e)),
+        })),
+      );
+    },
+    [],
+  );
+
   return {
     routines,
     status,
@@ -186,5 +201,6 @@ export function useRoutines() {
     addExercise,
     removeExercise,
     reorderExercises,
+    editItemPlan,
   };
 }

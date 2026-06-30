@@ -69,9 +69,14 @@ export type ImportExercise = {
   plannedRir: string | null;
   restSeconds: number | null;
   note: string | null;
+  muscleGroup: string | null; // grupo inferido por la IA; editable en el preview
 };
 export type ImportDay = { name: string | null; exercises: ImportExercise[] };
 export type ImportRoutine = { name: string | null; days: ImportDay[] };
+
+// ─── Grupos musculares personalizados ─────────────────────────────────────────
+
+export type MuscleGroup = { id: string; name: string; createdAt: string };
 
 // ─── Peso corporal ────────────────────────────────────────────────────────────
 

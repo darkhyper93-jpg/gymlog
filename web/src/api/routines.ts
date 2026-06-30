@@ -25,8 +25,17 @@ export const deleteRoutineDay = (dayId: string): Promise<{ id: string }> =>
 export const addExerciseToDay = (dayId: string, exerciseId: string): Promise<RoutineDayExercise> =>
   apiRequest<RoutineDayExercise>(`/routine-days/${dayId}/exercises`, { method: 'POST', body: { exerciseId } });
 
-export const updateDayExercise = (itemId: string, order: number): Promise<RoutineDayExercise> =>
-  apiRequest<RoutineDayExercise>(`/routine-day-exercises/${itemId}`, { method: 'PATCH', body: { order } });
+export type ItemPlanPatch = {
+  order?: number;
+  plannedSets?: number | null;
+  plannedReps?: string | null;
+  plannedRir?: string | null;
+  restSeconds?: number | null;
+  note?: string | null;
+};
+
+export const updateDayExercise = (itemId: string, patch: ItemPlanPatch): Promise<RoutineDayExercise> =>
+  apiRequest<RoutineDayExercise>(`/routine-day-exercises/${itemId}`, { method: 'PATCH', body: patch });
 
 export const removeDayExercise = (itemId: string): Promise<{ id: string }> =>
   apiRequest<{ id: string }>(`/routine-day-exercises/${itemId}`, { method: 'DELETE' });
