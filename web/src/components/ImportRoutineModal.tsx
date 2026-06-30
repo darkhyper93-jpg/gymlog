@@ -293,7 +293,7 @@ export function ImportRoutineModal({
           {phase === 'input' && (
             <div className="flex flex-col gap-4">
               <p className="text-sm text-muted">
-                Pegá el texto de tu rutina o subí un archivo (txt, pdf, xlsx, csv). El sistema lo interpreta y te muestra un preview editable antes de guardar.
+                Pegá el texto de tu rutina o subí un archivo (txt, pdf, docx, xlsx, csv). El sistema lo interpreta y te muestra un preview editable antes de guardar.
               </p>
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted">Texto</span>
@@ -311,7 +311,7 @@ export function ImportRoutineModal({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".txt,.pdf,.xlsx,.xls,.csv"
+                  accept=".txt,.pdf,.docx,.xlsx,.xls,.csv"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -322,7 +322,7 @@ export function ImportRoutineModal({
                     px-4 text-sm text-muted transition-colors hover:border-brand hover:text-fg"
                 >
                   <DumbbellIcon className="h-4 w-4 shrink-0" />
-                  {file ? file.name : 'Elegir archivo (.txt, .pdf, .xlsx, .csv)'}
+                  {file ? file.name : 'Elegir archivo (.txt, .pdf, .docx, .xlsx, .csv)'}
                 </button>
                 {fileError && <p className="text-xs text-danger">{fileError}</p>}
               </div>

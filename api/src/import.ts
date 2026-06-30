@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
 import * as XLSX from 'xlsx';
+import mammoth from 'mammoth';
 import { prisma } from './db.js';
 import { getUserId } from './auth.js';
 import { HttpError, ok } from './http.js';
@@ -12,7 +13,7 @@ export const importRouter = Router();
 
 // ─── Multer ───────────────────────────────────────────────────────────────────
 
-const ALLOWED_EXTS = new Set(['.txt', '.pdf', '.xlsx', '.xls', '.csv']);
+const ALLOWED_EXTS = new Set(['.txt', '.pdf', '.docx', '.xlsx', '.xls', '.csv']);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,7 +23,7 @@ const upload = multer({
     if (ALLOWED_EXTS.has(ext)) {
       cb(null, true);
     } else {
-      cb(new HttpError(400, 'Tipo de archivo no soportado. Usá txt, pdf, xlsx, xls o csv.'));
+      cb(new HttpError(400, 'Tipo de archivo no soportado. Usá txt, pdf, docx, xlsx, xls o csv.'));
     }
   },
 });
@@ -41,6 +42,9 @@ async function extractText(file: Express.Multer.File | undefined, pastedText: st
       const parser = new PDFParse({ data: file.buffer });
       const result = await parser.getText();
       text = result.text;
+    } else if (ext === '.docx') {
+      const { value } = await mammoth.extractRawText({ buffer: file.buffer });
+      text = value;
     } else if (ext === '.xlsx' || ext === '.xls') {
       const wb = XLSX.read(file.buffer, { type: 'buffer' });
       text = wb.SheetNames.map((name) => {
