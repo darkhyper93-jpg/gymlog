@@ -39,7 +39,8 @@ function parseNameOrOrder(body: unknown): { name?: string; order?: number } {
 }
 
 // Include reutilizable para cargar rutina completa (días → ejercicios → Exercise).
-const fullInclude = {
+// Exportado para que import.ts pueda reutilizarlo sin duplicar el shape.
+export const fullInclude = {
   days: {
     orderBy: { order: 'asc' as const },
     include: {

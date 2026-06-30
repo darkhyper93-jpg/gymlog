@@ -11,6 +11,7 @@ import { achievementsRouter } from './achievements';
 import { exportRouter } from './export';
 import { bodyWeightRouter } from './body-weight';
 import { pushRouter } from './push';
+import { importRouter } from './import';
 import { HttpError } from './http';
 
 const app = express();
@@ -43,6 +44,7 @@ app.use('/achievements', requireAuth, achievementsRouter);
 app.use('/export', requireAuth, exportRouter);
 app.use('/body-weight', requireAuth, bodyWeightRouter);
 app.use('/push', pushRouter); // subscribe/unsubscribe requieren auth internamente; send-daily es semi-público
+app.use('/import', requireAuth, importRouter);
 
 // Handler de error central: arma el envelope { success: false, error } con el status correcto.
 // Express 5 propaga el rechazo de las promesas async hasta acá, así que los handlers solo
