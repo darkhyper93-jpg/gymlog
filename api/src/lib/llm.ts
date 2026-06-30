@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HttpError } from '../http.js';
+import { normalizeMg } from '../muscle-groups.js';
 
 // Topes para no explotar con salida del LLM o body del commit malformado.
 const MAX_DAYS = 14;
@@ -37,6 +38,7 @@ const plannedExerciseBase = {
   plannedRir:  z.string().trim().max(10).nullable().default(null),
   restSeconds: z.number().int().min(0).max(3600).nullable().default(null),
   note:        z.string().trim().max(200).nullable().default(null),
+  muscleGroup: z.string().nullable().default(null),
 };
 
 // PREVIEW (lenient): name puede ser null → el front lo marca "no encontrado".
@@ -73,7 +75,8 @@ export type CommitRoutine = z.infer<typeof CommitRoutineSchema>;
 
 // ─── Prompt de extracción ─────────────────────────────────────────────────────
 
-const EXTRACTION_PROMPT = `Sos un extractor de rutinas de gimnasio. Recibís el texto crudo de una rutina (puede venir de un PDF, Excel, CSV, Word o texto pegado, así que puede estar desordenado) y devolvés EXCLUSIVAMENTE un JSON válido (sin markdown, sin \`\`\`json, sin comentarios) con EXACTAMENTE esta forma:
+function buildExtractionPrompt(allowedGroups: string[]): string {
+  return `Sos un extractor de rutinas de gimnasio. Recibís el texto crudo de una rutina (puede venir de un PDF, Excel, CSV, Word o texto pegado, así que puede estar desordenado) y devolvés EXCLUSIVAMENTE un JSON válido (sin markdown, sin \`\`\`json, sin comentarios) con EXACTAMENTE esta forma:
 
 {
   "name": string | null,
@@ -85,7 +88,8 @@ const EXTRACTION_PROMPT = `Sos un extractor de rutinas de gimnasio. Recibís el 
           "plannedReps": string | null,
           "plannedRir": string | null,
           "restRaw": string | null,
-          "note": string | null }
+          "note": string | null,
+          "muscleGroup": string | null }
       ] }
   ]
 }
@@ -101,10 +105,12 @@ REGLAS ESTRICTAS:
 - "plannedRir": el RIR/RPE objetivo como TEXTO, conservando rangos (de "RIR 1-2" → "1-2"; de "RIR2" → "2"). null si no aparece.
 - "restRaw": el descanso EXACTAMENTE como aparece en el texto (ej: "2 min", "90s", "1'", "1:30", "2 minutos"). NO conviertas a número. null si no aparece. Ejemplos: "1 min"→"1 min", "90s"→"90s", "1'"→"1'", "2 minutos"→"2 minutos", "1:30"→"1:30".
 - "note": aclaración del ejercicio (tempo, técnica, "drop set"…) como texto. null si no hay.
+- "muscleGroup": el grupo muscular principal del ejercicio. Elegí UNO SOLO de esta lista exacta (copiá el texto tal cual): ${allowedGroups.join(', ')}. Si no podés inferirlo con confianza o no encaja en ninguno, poné null. NO inventes un grupo fuera de la lista.
 - Máximo 14 días y 40 ejercicios por día.
 
 TEXTO DE LA RUTINA:
 """`;
+}
 
 // Schema interno para la respuesta cruda del LLM (tiene restRaw, no restSeconds).
 const LlmExerciseSchema = z.object({
@@ -114,6 +120,7 @@ const LlmExerciseSchema = z.object({
   plannedRir:  z.string().trim().max(10).nullable().default(null),
   restRaw:     z.string().trim().max(30).nullable().default(null),
   note:        z.string().trim().max(200).nullable().default(null),
+  muscleGroup: z.string().trim().max(30).nullable().default(null),
 });
 const LlmRoutineSchema = z.object({
   name: z.string().trim().max(120).nullable().default(null),
@@ -134,7 +141,15 @@ type GeminiResponse = {
 
 // ─── Llamada al LLM ───────────────────────────────────────────────────────────
 
-export async function extractRoutine(text: string): Promise<PreviewRoutine> {
+// Resuelve un muscleGroup crudo del LLM contra el conjunto permitido (case-insensitive),
+// devolviendo el valor canónico tal cual está en `allowedGroups`, o null si no mapea.
+function resolveLlmMuscleGroup(raw: string | null, allowedGroups: string[]): string | null {
+  if (!raw) return null;
+  const normalized = normalizeMg(raw);
+  return allowedGroups.find((g) => normalizeMg(g) === normalized) ?? null;
+}
+
+export async function extractRoutine(text: string, allowedGroups: string[]): Promise<PreviewRoutine> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new HttpError(503, 'El parseo de rutinas no está configurado (falta GEMINI_API_KEY)');
@@ -159,7 +174,7 @@ export async function extractRoutine(text: string): Promise<PreviewRoutine> {
         contents: [
           {
             parts: [
-              { text: EXTRACTION_PROMPT + '\n' + text + '\n"""' },
+              { text: buildExtractionPrompt(allowedGroups) + '\n' + text + '\n"""' },
             ],
           },
         ],
@@ -211,6 +226,7 @@ export async function extractRoutine(text: string): Promise<PreviewRoutine> {
         plannedRir:  ex.plannedRir,
         restSeconds: restToSeconds(ex.restRaw),
         note:        ex.note,
+        muscleGroup: resolveLlmMuscleGroup(ex.muscleGroup, allowedGroups),
       })),
     })),
   };

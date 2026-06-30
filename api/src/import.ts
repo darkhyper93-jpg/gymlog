@@ -8,6 +8,7 @@ import { getUserId } from './auth.js';
 import { HttpError, ok } from './http.js';
 import { extractRoutine, CommitRoutineSchema } from './lib/llm.js';
 import { fullInclude } from './routines.js';
+import { getAllowedMuscleGroups, normalizeMg } from './muscle-groups.js';
 
 export const importRouter = Router();
 
@@ -81,10 +82,11 @@ async function extractText(file: Express.Multer.File | undefined, pastedText: st
 // Extrae texto, llama al LLM y devuelve el preview SIN guardar nada.
 
 importRouter.post('/parse', upload.single('file'), async (req, res) => {
-  getUserId(req); // exige auth
+  const userId = getUserId(req);
   const pastedText = typeof req.body?.text === 'string' ? req.body.text : undefined;
   const text = await extractText(req.file, pastedText);
-  const preview = await extractRoutine(text);
+  const allowedGroups = [...(await getAllowedMuscleGroups(userId))];
+  const preview = await extractRoutine(text, allowedGroups);
   ok(res, preview);
 });
 
@@ -100,9 +102,23 @@ importRouter.post('/commit', async (req, res) => {
   }
   const routine = parsed.data;
 
+  // Re-validar muscleGroup server-side (defensa: el cliente pudo tocar el valor en el
+  // preview); el conjunto permitido es built-in ∪ custom de ESTE usuario.
+  const allowed = await getAllowedMuscleGroups(userId);
+  function resolveMuscleGroup(raw: string | null): string | null {
+    if (!raw) return null;
+    const normalized = normalizeMg(raw);
+    for (const candidate of allowed) {
+      if (normalizeMg(candidate) === normalized) return candidate;
+    }
+    return null;
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     // 1) Resolver/crear ejercicios por nombre (case-insensitive, scopeado userId).
     //    La dedup en el mismo import evita duplicados entre días.
+    // DECISIÓN: muscleGroup solo se setea al CREAR el ejercicio; si ya existía, no se
+    // pisa su categorización previa.
     const nameToId = new Map<string, string>();
     for (const day of routine.days) {
       for (const ex of day.exercises) {
@@ -113,7 +129,11 @@ importRouter.post('/commit', async (req, res) => {
         });
         const id =
           existing?.id ??
-          (await tx.exercise.create({ data: { name: ex.name, userId } })).id;
+          (
+            await tx.exercise.create({
+              data: { name: ex.name, userId, muscleGroup: resolveMuscleGroup(ex.muscleGroup) },
+            })
+          ).id;
         nameToId.set(key, id);
       }
     }
