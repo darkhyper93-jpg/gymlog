@@ -35,6 +35,12 @@ export type RoutineDayExercise = {
   exerciseId: string;
   order: number;
   exercise: Exercise; // Exercise embebido (include del backend)
+  // Campos del plan importado (B2). Todos opcionales: null si no se importó valor.
+  plannedSets: number | null;
+  plannedReps: string | null;
+  plannedRir: string | null;
+  restSeconds: number | null;
+  note: string | null;
 };
 
 export type RoutineDay = {
@@ -53,6 +59,19 @@ export type Routine = {
   createdAt: string;
   days: RoutineDay[];
 };
+
+// ─── Importar rutinas ─────────────────────────────────────────────────────────
+
+export type ImportExercise = {
+  name: string | null; // null = "no encontrado" en el preview
+  plannedSets: number | null;
+  plannedReps: string | null;
+  plannedRir: string | null;
+  restSeconds: number | null;
+  note: string | null;
+};
+export type ImportDay = { name: string | null; exercises: ImportExercise[] };
+export type ImportRoutine = { name: string | null; days: ImportDay[] };
 
 // ─── Peso corporal ────────────────────────────────────────────────────────────
 

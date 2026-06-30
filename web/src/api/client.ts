@@ -26,9 +26,11 @@ type RequestOptions = {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body } = options;
 
-  // Headers: JSON si hay body + el token de sesión si existe (rutas protegidas).
+  // Headers: JSON si hay body (excepto FormData, que el browser pone su propio Content-Type
+  // con el boundary) + el token de sesión si existe (rutas protegidas).
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const isFormData = body instanceof FormData;
+  if (body !== undefined && !isFormData) headers['Content-Type'] = 'application/json';
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -37,7 +39,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     // Falla de red / server caído: mensaje claro para el estado de error de la UI.

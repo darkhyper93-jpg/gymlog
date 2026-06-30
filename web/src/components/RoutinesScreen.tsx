@@ -6,6 +6,7 @@ import { useExercises } from '../hooks/useExercises';
 import { useTodaySets } from '../hooks/useTodaySets';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
 import { Button, Card, IconButton, Modal, Spinner, StateView, TextInput } from './ui';
+import { ImportRoutineModal } from './ImportRoutineModal';
 import {
   AlertTriangleIcon,
   CalendarIcon,
@@ -86,6 +87,7 @@ type ModalState =
   | { type: 'edit-day'; routineId: string; day: RoutineDay }
   | { type: 'add-exercise'; routineId: string; dayId: string }
   | { type: 'today-session' }
+  | { type: 'import' }
   | null;
 
 // ─── NameModal ────────────────────────────────────────────────────────────────
@@ -352,6 +354,22 @@ function ExerciseSelectorModal({
 
 // ─── ExerciseRow ──────────────────────────────────────────────────────────────
 
+// Formatea el resumen del plan importado (sets×reps · RIR · Xs) para mostrar en la fila.
+function formatPlanned(item: RoutineDayExercise): string | null {
+  const parts: string[] = [];
+  if (item.plannedSets != null || item.plannedReps != null) {
+    const s = item.plannedSets != null ? String(item.plannedSets) : '?';
+    const r = item.plannedReps ?? '?';
+    parts.push(`${s}×${r}`);
+  }
+  if (item.plannedRir != null) parts.push(`RIR ${item.plannedRir}`);
+  if (item.restSeconds != null) {
+    parts.push(item.restSeconds >= 60 ? `${Math.round(item.restSeconds / 60)}min` : `${item.restSeconds}s`);
+  }
+  if (item.note) parts.push(item.note);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 function TodayStatus({ sets }: { sets: WorkoutSet[] | undefined }) {
   if (sets === undefined) return null; // cargando, no mostrar nada
   if (sets.length === 0) {
@@ -413,6 +431,9 @@ function ExerciseRow({
             <span className="text-xs text-muted">· {item.exercise.target}</span>
           )}
         </div>
+        {formatPlanned(item) && (
+          <span className="text-xs font-medium text-brand/80">{formatPlanned(item)}</span>
+        )}
         <TodayStatus sets={todaySets} />
       </div>
       {/* Actions */}
@@ -827,13 +848,23 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
               : '¿Qué entrenás hoy?'}
           </span>
         </button>
-        <Button
-          onClick={() => setModal({ type: 'create-routine' })}
-          className="sm:w-auto"
-        >
-          <PlusIcon className="h-5 w-5" />
-          Nueva rutina
-        </Button>
+        <div className="flex gap-2 sm:w-auto">
+          <Button
+            variant="secondary"
+            onClick={() => setModal({ type: 'import' })}
+            className="flex-1 sm:flex-none"
+          >
+            <DumbbellIcon className="h-5 w-5" />
+            Importar rutina
+          </Button>
+          <Button
+            onClick={() => setModal({ type: 'create-routine' })}
+            className="flex-1 sm:flex-none"
+          >
+            <PlusIcon className="h-5 w-5" />
+            Nueva rutina
+          </Button>
+        </div>
       </div>
 
       {routines.length === 0 ? (
@@ -914,6 +945,16 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
             await hook.addExercise(modal.routineId, modal.dayId, ex.id);
           }}
           onClose={closeModal}
+        />
+      )}
+      {modal !== null && modal.type === 'import' && (
+        <ImportRoutineModal
+          onClose={closeModal}
+          onImported={(r) => {
+            void hook.reload();
+            setExpandedId(r.id);
+            closeModal();
+          }}
         />
       )}
     </div>
