@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { createRequire } from 'module';
+import { PDFParse } from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import { prisma } from './db.js';
 import { getUserId } from './auth.js';
@@ -9,14 +9,6 @@ import { extractRoutine, CommitRoutineSchema } from './lib/llm.js';
 import { fullInclude } from './routines.js';
 
 export const importRouter = Router();
-
-// ─── pdf-parse: ES module interop ────────────────────────────────────────────
-// pdf-parse es CommonJS y corre código de debug al importar desde su index.js.
-// Importamos el subpath interno para evitar ese efecto lateral.
-// Si el interop ESM falla, createRequire es el fallback seguro.
-const _require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = _require('pdf-parse/lib/pdf-parse.js');
 
 // ─── Multer ───────────────────────────────────────────────────────────────────
 
@@ -53,7 +45,9 @@ async function extractText(file: Express.Multer.File | undefined, pastedText: st
   } else if (file) {
     const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
     if (ext === '.pdf') {
-      const result = await pdfParse(file.buffer);
+      // pdf-parse v2: clase PDFParse({ data: Buffer }), método getText() → { text }
+      const parser = new PDFParse({ data: file.buffer });
+      const result = await parser.getText();
       text = result.text;
     } else if (ext === '.xlsx' || ext === '.xls') {
       const wb = XLSX.read(file.buffer, { type: 'buffer' });
