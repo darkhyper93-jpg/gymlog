@@ -5,18 +5,13 @@ export function listExercises(): Promise<Exercise[]> {
   return apiRequest<Exercise[]>('/exercises');
 }
 
-export function createExercise(input: {
-  name: string;
-  target?: string;
-  muscleGroup: string;
-  restSeconds?: number | null;
-}): Promise<Exercise> {
+export function createExercise(input: { name: string; muscleGroup: string }): Promise<Exercise> {
   return apiRequest<Exercise>('/exercises', { method: 'POST', body: input });
 }
 
 export function updateExercise(
   id: string,
-  input: { name?: string; target?: string; muscleGroup?: string; restSeconds?: number | null },
+  input: { name?: string; muscleGroup?: string },
 ): Promise<Exercise> {
   return apiRequest<Exercise>(`/exercises/${id}`, { method: 'PATCH', body: input });
 }

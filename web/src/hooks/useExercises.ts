@@ -33,21 +33,15 @@ export function useExercises() {
     void load();
   }, [load]);
 
-  const add = useCallback(
-    async (input: { name: string; target?: string; muscleGroup: string; restSeconds?: number | null }) => {
-      const created = await createExercise(input);
-      setExercises((prev) => [created, ...prev]);
-    },
-    [],
-  );
+  const add = useCallback(async (input: { name: string; muscleGroup: string }) => {
+    const created = await createExercise(input);
+    setExercises((prev) => [created, ...prev]);
+  }, []);
 
-  const edit = useCallback(
-    async (id: string, input: { name?: string; target?: string; muscleGroup?: string; restSeconds?: number | null }) => {
-      const updated = await updateExercise(id, input);
-      setExercises((prev) => prev.map((ex) => (ex.id === id ? updated : ex)));
-    },
-    [],
-  );
+  const edit = useCallback(async (id: string, input: { name?: string; muscleGroup?: string }) => {
+    const updated = await updateExercise(id, input);
+    setExercises((prev) => prev.map((ex) => (ex.id === id ? updated : ex)));
+  }, []);
 
   const remove = useCallback(async (id: string) => {
     await deleteExercise(id);
