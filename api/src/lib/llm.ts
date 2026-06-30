@@ -5,6 +5,32 @@ import { HttpError } from '../http.js';
 const MAX_DAYS = 14;
 const MAX_EX_PER_DAY = 40;
 
+// Convierte el texto crudo de descanso que devuelve el LLM a segundos.
+// "2 min" → 120, "1'" → 60, "90s" → 90, "1:30" → 90, "90" → 90, null → null.
+export function restToSeconds(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s) return null;
+
+  // "1:30" → 1*60+30 = 90
+  const mss = s.match(/^(\d+):(\d{2})$/);
+  if (mss) return parseInt(mss[1]!, 10) * 60 + parseInt(mss[2]!, 10);
+
+  const num = parseFloat(s);
+  if (isNaN(num)) return null;
+
+  // minutos: "min", "minuto", "minutos", "'" (pie), "\"" (pulgada usada como min a veces)
+  if (/min|minuto|minutos|'/i.test(s)) return Math.round(num * 60);
+
+  // segundos: "seg", "segundo", "segundos", o número seguido de "s"
+  if (/seg|segundo|segundos/i.test(s) || /\d\s*s\s*$/i.test(s)) return Math.round(num);
+
+  // número pelado sin unidad → segundos
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(num);
+
+  return null;
+}
+
 const plannedExerciseBase = {
   plannedSets: z.number().int().min(1).max(30).nullable().default(null),
   plannedReps: z.string().trim().max(20).nullable().default(null),
@@ -47,7 +73,7 @@ export type CommitRoutine = z.infer<typeof CommitRoutineSchema>;
 
 // ─── Prompt de extracción ─────────────────────────────────────────────────────
 
-const EXTRACTION_PROMPT = `Sos un extractor de rutinas de gimnasio. Recibís el texto crudo de una rutina (puede venir de un PDF, Excel, CSV o texto pegado, así que puede estar desordenado) y devolvés EXCLUSIVAMENTE un JSON válido (sin markdown, sin \`\`\`json, sin comentarios) con EXACTAMENTE esta forma:
+const EXTRACTION_PROMPT = `Sos un extractor de rutinas de gimnasio. Recibís el texto crudo de una rutina (puede venir de un PDF, Excel, CSV, Word o texto pegado, así que puede estar desordenado) y devolvés EXCLUSIVAMENTE un JSON válido (sin markdown, sin \`\`\`json, sin comentarios) con EXACTAMENTE esta forma:
 
 {
   "name": string | null,
@@ -58,7 +84,7 @@ const EXTRACTION_PROMPT = `Sos un extractor de rutinas de gimnasio. Recibís el 
           "plannedSets": number | null,
           "plannedReps": string | null,
           "plannedRir": string | null,
-          "restSeconds": number | null,
+          "restRaw": string | null,
           "note": string | null }
       ] }
   ]
@@ -73,12 +99,29 @@ REGLAS ESTRICTAS:
 - "plannedSets": cantidad de series como entero (de "4x8-10" → 4). null si no aparece.
 - "plannedReps": las repeticiones como TEXTO, conservando rangos (de "4x8-10" → "8-10"; de "3x12" → "12"). null si no aparece.
 - "plannedRir": el RIR/RPE objetivo como TEXTO, conservando rangos (de "RIR 1-2" → "1-2"; de "RIR2" → "2"). null si no aparece.
-- "restSeconds": descanso entre series EN SEGUNDOS como entero (de "2 min" → 120; de "90s" → 90). null si no aparece.
+- "restRaw": el descanso EXACTAMENTE como aparece en el texto (ej: "2 min", "90s", "1'", "1:30", "2 minutos"). NO conviertas a número. null si no aparece. Ejemplos: "1 min"→"1 min", "90s"→"90s", "1'"→"1'", "2 minutos"→"2 minutos", "1:30"→"1:30".
 - "note": aclaración del ejercicio (tempo, técnica, "drop set"…) como texto. null si no hay.
 - Máximo 14 días y 40 ejercicios por día.
 
 TEXTO DE LA RUTINA:
 """`;
+
+// Schema interno para la respuesta cruda del LLM (tiene restRaw, no restSeconds).
+const LlmExerciseSchema = z.object({
+  name:        z.string().trim().max(80).nullable().default(null),
+  plannedSets: z.number().int().min(1).max(30).nullable().default(null),
+  plannedReps: z.string().trim().max(20).nullable().default(null),
+  plannedRir:  z.string().trim().max(10).nullable().default(null),
+  restRaw:     z.string().trim().max(30).nullable().default(null),
+  note:        z.string().trim().max(200).nullable().default(null),
+});
+const LlmRoutineSchema = z.object({
+  name: z.string().trim().max(120).nullable().default(null),
+  days: z.array(z.object({
+    name:      z.string().trim().max(60).nullable().default(null),
+    exercises: z.array(LlmExerciseSchema).max(MAX_EX_PER_DAY),
+  })).min(1).max(MAX_DAYS),
+});
 
 // Tipo mínimo para narrowing de la respuesta cruda de Gemini (sin `any`).
 type GeminiResponse = {
@@ -151,9 +194,25 @@ export async function extractRoutine(text: string): Promise<PreviewRoutine> {
     throw new HttpError(422, 'La rutina extraída no tiene un formato válido');
   }
 
-  const result = PreviewRoutineSchema.safeParse(parsed);
-  if (!result.success) {
+  const llmResult = LlmRoutineSchema.safeParse(parsed);
+  if (!llmResult.success) {
     throw new HttpError(422, 'La rutina extraída no tiene un formato válido');
   }
-  return result.data;
+
+  // Convertir restRaw → restSeconds de forma determinística.
+  const preview: PreviewRoutine = {
+    name: llmResult.data.name,
+    days: llmResult.data.days.map((day) => ({
+      name: day.name,
+      exercises: day.exercises.map((ex) => ({
+        name:        ex.name,
+        plannedSets: ex.plannedSets,
+        plannedReps: ex.plannedReps,
+        plannedRir:  ex.plannedRir,
+        restSeconds: restToSeconds(ex.restRaw),
+        note:        ex.note,
+      })),
+    })),
+  };
+  return preview;
 }
