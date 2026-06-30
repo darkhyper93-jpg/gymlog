@@ -37,14 +37,23 @@ async function extractText(file: Express.Multer.File | undefined, pastedText: st
     text = pastedText;
   } else if (file) {
     const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+    const corruptMsg = 'No se pudo leer el archivo (puede estar corrupto o no tener texto seleccionable); probá con otro archivo o pegá el texto.';
     if (ext === '.pdf') {
-      // pdf-parse v2: clase PDFParse({ data: Buffer }), método getText() → { text }
-      const parser = new PDFParse({ data: file.buffer });
-      const result = await parser.getText();
-      text = result.text;
+      try {
+        // pdf-parse v2: clase PDFParse({ data: Buffer }), método getText() → { text }
+        const parser = new PDFParse({ data: file.buffer });
+        const result = await parser.getText();
+        text = result.text;
+      } catch {
+        throw new HttpError(422, corruptMsg);
+      }
     } else if (ext === '.docx') {
-      const { value } = await mammoth.extractRawText({ buffer: file.buffer });
-      text = value;
+      try {
+        const { value } = await mammoth.extractRawText({ buffer: file.buffer });
+        text = value;
+      } catch {
+        throw new HttpError(422, corruptMsg);
+      }
     } else if (ext === '.xlsx' || ext === '.xls') {
       const wb = XLSX.read(file.buffer, { type: 'buffer' });
       text = wb.SheetNames.map((name) => {
