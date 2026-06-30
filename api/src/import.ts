@@ -13,21 +13,13 @@ export const importRouter = Router();
 // ─── Multer ───────────────────────────────────────────────────────────────────
 
 const ALLOWED_EXTS = new Set(['.txt', '.pdf', '.xlsx', '.xls', '.csv']);
-const ALLOWED_MIMES = new Set([
-  'text/plain',
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
-  'text/csv',
-  'application/octet-stream', // algunos browsers usan esto para xlsx
-]);
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
   fileFilter(_req, file, cb) {
     const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
-    if (ALLOWED_EXTS.has(ext) || ALLOWED_MIMES.has(file.mimetype)) {
+    if (ALLOWED_EXTS.has(ext)) {
       cb(null, true);
     } else {
       cb(new HttpError(400, 'Tipo de archivo no soportado. Usá txt, pdf, xlsx, xls o csv.'));
