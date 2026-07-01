@@ -112,6 +112,40 @@ export function Select({
   );
 }
 
+// Switch on/off grande mobile-first (44px+ de target táctil). Usado por el toggle de
+// autorregulación (Routine.autoDeloadEnabled) y cualquier otro on/off simple de la app.
+export function Toggle({
+  checked,
+  onChange,
+  disabled = false,
+  label,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors
+        duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand
+        focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-50
+        disabled:pointer-events-none ${checked ? 'bg-brand' : 'bg-surface-2 border border-border'}`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform
+          duration-200 ${checked ? 'translate-x-6' : 'translate-x-1'}`}
+      />
+    </button>
+  );
+}
+
 // Tarjeta: contenedor base con elevación sutil. Unifica el padding y el ritmo de toda la app.
 export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
   return (

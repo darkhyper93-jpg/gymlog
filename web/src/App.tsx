@@ -31,7 +31,7 @@ const TAB_LABELS: Record<Tab, string> = {
 
 // Sub-vista register: se abre desde Ejercicios o desde un día de rutina; el botón ← vuelve.
 type SubView =
-  | { name: 'register'; exercise: Exercise; plannedRestSeconds?: number | null }
+  | { name: 'register'; exercise: Exercise; plannedRestSeconds?: number | null; showSuggestion?: boolean }
   | null;
 
 export default function App() {
@@ -109,6 +109,7 @@ export default function App() {
           <RegisterScreen
             exercise={subView!.exercise}
             plannedRestSeconds={subView!.plannedRestSeconds}
+            showSuggestion={subView!.showSuggestion}
           />
         ) : tab === 'ejercicios' ? (
           <ExercisesScreen
@@ -116,8 +117,8 @@ export default function App() {
           />
         ) : tab === 'rutinas' ? (
           <RoutinesScreen
-            onRegister={(exercise, plannedRestSeconds) =>
-              setSubView({ name: 'register', exercise, plannedRestSeconds })
+            onRegister={(exercise, plannedRestSeconds, showSuggestion) =>
+              setSubView({ name: 'register', exercise, plannedRestSeconds, showSuggestion })
             }
           />
         ) : tab === 'progreso' ? (

@@ -78,6 +78,16 @@ export function useRoutines() {
     setRoutines((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  // Activar/desactivar sugerencias de carga/deload de la rutina. Al activar sin ejercicios
+  // con peso registrado, el backend rechaza con 400 (el mensaje trae la lista de faltantes);
+  // se propaga el error para que la UI lo muestre, sin tocar el estado local.
+  const setAutoDeload = useCallback(async (id: string, enabled: boolean) => {
+    const updated = await updateRoutine(id, { autoDeloadEnabled: enabled });
+    setRoutines((prev) =>
+      mapRoutine(prev, id, (r) => ({ ...r, autoDeloadEnabled: updated.autoDeloadEnabled })),
+    );
+  }, []);
+
   // ─── Días ─────────────────────────────────────────────────────────────────
 
   const addDay = useCallback(async (routineId: string, name: string): Promise<RoutineDay> => {
@@ -194,6 +204,7 @@ export function useRoutines() {
     addRoutine,
     editRoutine,
     removeRoutine,
+    setAutoDeload,
     addDay,
     editDay,
     removeDay,

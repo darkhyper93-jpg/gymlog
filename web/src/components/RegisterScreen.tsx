@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
+import { useSuggestion } from '../hooks/useSuggestion';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
-import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
+import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TrashIcon, TrendingUpIcon } from './icons';
 import { useRestTimerActions } from '../timer/restTimerContexts';
 import { todayKeyMVD } from '../time';
 import { Toast } from './Toast';
@@ -18,9 +19,11 @@ import { CSS } from '@dnd-kit/utilities';
 export function RegisterScreen({
   exercise,
   plannedRestSeconds,
+  showSuggestion = false,
 }: {
   exercise: Exercise;
   plannedRestSeconds?: number | null;
+  showSuggestion?: boolean;
 }) {
   const { status, error, todaySets, reference, reload, addSet, removeSet, editSet, reorderTodaySets } = useRegister(exercise.id);
   const timer = useRestTimerActions();
@@ -92,6 +95,8 @@ export function RegisterScreen({
               />
             )}
           </section>
+
+          {showSuggestion && <SuggestionCard exerciseId={exercise.id} />}
 
           <Card className="flex flex-col gap-4 border-brand/30">
             <SectionLabel>Nueva serie</SectionLabel>
@@ -199,6 +204,53 @@ function ReferencePanel({ reference }: { reference: { date: string; sets: Workou
           </span>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// ─── Sugerencia de carga (autorregulación, solo lectura) ─────────────────────
+// Sello constante: "Sugerencia — vos decidís". Nunca imperativo, nunca se auto-aplica.
+
+const ACTION_LABEL: Record<string, string> = {
+  subir: 'Subir',
+  mantener: 'Mantener',
+  bajar: 'Bajar',
+};
+
+function SuggestionCard({ exerciseId }: { exerciseId: string }) {
+  const { status, suggestion, error } = useSuggestion(exerciseId, true);
+
+  return (
+    <Card className="flex flex-col gap-2 border-accent/30 bg-accent/5">
+      <div className="flex items-center gap-2">
+        <TrendingUpIcon className="h-4 w-4 shrink-0 text-accent" />
+        <SectionLabel>Sugerencia — vos decidís</SectionLabel>
+      </div>
+
+      {status === 'loading' && <p className="text-sm text-muted">Analizando tu progreso…</p>}
+
+      {status === 'error' && (
+        <p className="text-sm text-danger">{error ?? 'No se pudo calcular la sugerencia'}</p>
+      )}
+
+      {status === 'ready' && suggestion && suggestion.action === 'sin-datos' && (
+        <p className="text-sm text-muted">{suggestion.rationale}</p>
+      )}
+
+      {status === 'ready' && suggestion && suggestion.action !== 'sin-datos' && (
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-semibold text-fg">
+            {ACTION_LABEL[suggestion.action]}
+            {suggestion.suggestedWeight != null && ` a ${suggestion.suggestedWeight}kg`}
+          </p>
+          <p className="text-sm leading-relaxed text-muted">{suggestion.rationale}</p>
+          {!suggestion.rirUsed && (
+            <p className="text-xs italic text-muted/80">
+              Sin RIR cargado; sugerencia con menor confianza.
+            </p>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

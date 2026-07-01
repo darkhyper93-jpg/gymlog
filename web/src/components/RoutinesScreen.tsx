@@ -5,7 +5,7 @@ import { useRoutines } from '../hooks/useRoutines';
 import { useExercises } from '../hooks/useExercises';
 import { useTodaySets } from '../hooks/useTodaySets';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
-import { Button, Card, IconButton, Modal, NumberField, Spinner, StateView, TextInput } from './ui';
+import { Button, Card, IconButton, Modal, NumberField, Spinner, StateView, TextInput, Toggle } from './ui';
 import { ImportRoutineModal } from './ImportRoutineModal';
 import {
   AlertTriangleIcon,
@@ -17,8 +17,11 @@ import {
   PencilIcon,
   PlusIcon,
   TrashIcon,
+  XIcon,
 } from './icons';
 import type { ItemPlanPatch } from '../api/routines';
+import { getRoutineDeloadStatus } from '../api/analysis';
+import type { RoutineDeloadStatus } from '../types';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -752,6 +755,95 @@ function DaySection({
   );
 }
 
+// ─── Autorregulación: toggle + banner de deload (sugerencias, solo lectura) ───
+
+// Toggle de sugerencias de carga/deload para una rutina. Sello "Sugerencia — vos decidís":
+// nunca se auto-aplica nada, solo habilita las sugerencias de lectura en Registrar.
+function AutoDeloadToggle({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: (next: boolean) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(next: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      await onToggle(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo actualizar');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-border/60 bg-surface-lowest px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-fg">Sugerencias de carga y deload</p>
+          <p className="text-xs text-muted">Sugerencia — vos decidís siempre.</p>
+        </div>
+        <Toggle
+          checked={enabled}
+          onChange={(next) => void handleChange(next)}
+          disabled={busy}
+          label="Sugerencias de carga y deload"
+        />
+      </div>
+      {error && (
+        <p className="text-xs leading-relaxed text-danger">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// Aviso descartable de semana de descarga (global por rutina). Se consulta solo cuando el
+// toggle está ON. El dismiss es solo de esta sesión de la pantalla (no persiste).
+function DeloadBanner({ routineId }: { routineId: string }) {
+  const [status, setStatus] = useState<RoutineDeloadStatus | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getRoutineDeloadStatus(routineId)
+      .then((data) => {
+        if (!cancelled) setStatus(data);
+      })
+      .catch(() => {
+        // Aviso best-effort: si falla, simplemente no se muestra nada.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [routineId]);
+
+  if (dismissed || !status?.deloadSuggested) return null;
+
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-accent">Semana de descarga sugerida</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-fg">
+          Bajá volumen/intensidad ~10–20% esta semana. Sugerencia — vos decidís.
+        </p>
+      </div>
+      <button
+        type="button"
+        aria-label="Descartar aviso"
+        onClick={() => setDismissed(true)}
+        className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-accent/20 hover:text-accent"
+      >
+        <XIcon className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 // ─── RoutineCard ──────────────────────────────────────────────────────────────
 
 function RoutineCard({
@@ -773,7 +865,7 @@ function RoutineCard({
   todayAbbr: string;
   todaySelection: TodaySelection | null;
   onOpenModal: (state: ModalState) => void;
-  onRegister: (ex: Exercise, plannedRestSeconds?: number | null) => void;
+  onRegister: (ex: Exercise, plannedRestSeconds?: number | null, showSuggestion?: boolean) => void;
 }) {
   const [localDays, setLocalDays] = useState<RoutineDay[]>(() =>
     [...routine.days].sort((a, b) => a.order - b.order),
@@ -834,6 +926,11 @@ function RoutineCard({
       {/* Expanded body */}
       {isExpanded && (
         <div className="flex flex-col gap-2 border-t border-border px-4 pb-4 pt-3">
+          <AutoDeloadToggle
+            enabled={routine.autoDeloadEnabled}
+            onToggle={(next) => hook.setAutoDeload(routine.id, next)}
+          />
+          {routine.autoDeloadEnabled && <DeloadBanner routineId={routine.id} />}
           {localDays.length === 0 ? (
             <p className="py-2 text-center text-sm text-muted">Sin días todavía</p>
           ) : (
@@ -858,7 +955,9 @@ function RoutineCard({
                       onOpenEditDay={() =>
                         onOpenModal({ type: 'edit-day', routineId: routine.id, day })
                       }
-                      onRegister={onRegister}
+                      onRegister={(ex, plannedRestSeconds) =>
+                        onRegister(ex, plannedRestSeconds, routine.autoDeloadEnabled)
+                      }
                       onOpenModal={onOpenModal}
                     />
                   ))}
@@ -886,7 +985,7 @@ function RoutineCard({
 export function RoutinesScreen({
   onRegister,
 }: {
-  onRegister: (ex: Exercise, plannedRestSeconds?: number | null) => void;
+  onRegister: (ex: Exercise, plannedRestSeconds?: number | null, showSuggestion?: boolean) => void;
 }) {
   const hook = useRoutines();
   const { routines, status, error, reload } = hook;
