@@ -58,6 +58,27 @@ export type Routine = {
   order: number;
   createdAt: string;
   days: RoutineDay[];
+  // Sugerencias de carga/deload (solo lectura) para esta rutina. Default false.
+  autoDeloadEnabled: boolean;
+};
+
+// ─── Autorregulación (sugerencias de solo lectura) ────────────────────────────
+
+export type LoadSuggestion = {
+  action: 'subir' | 'mantener' | 'bajar' | 'sin-datos';
+  suggestedWeight?: number;
+  rationale: string;
+  confidence: 'alta' | 'media' | 'baja';
+  rirUsed: boolean;
+};
+
+export type RoutineDeloadStatus = {
+  deloadSuggested: boolean;
+  rationale: string;
+  eligibleExercises: number;
+  stalledExercises: number;
+  deloadPctMin?: number;
+  deloadPctMax?: number;
 };
 
 // ─── Importar rutinas ─────────────────────────────────────────────────────────

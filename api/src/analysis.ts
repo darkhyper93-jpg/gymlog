@@ -1,8 +1,15 @@
-// Motor puro de autorregulación: predicción de carga por ejercicio (doble progresión + RIR)
-// y detección de meseta para sugerir una semana de descarga. Funciones puras, sin Prisma ni
-// Express, para poder testearlas con node --test sin base de datos.
+// Motor de autorregulación: predicción de carga por ejercicio (doble progresión + RIR)
+// y detección de meseta para sugerir una semana de descarga. La primera mitad del archivo
+// son funciones puras (sin Prisma/Express, testeadas con node --test); al final va el router
+// de solo lectura que las conecta con la base.
 //
 // REGLA DE ORO: nada acá escribe nada. Todo es sugerencia — "vos decidís".
+
+import { Router } from 'express';
+import { prisma } from './db';
+import { getUserId } from './auth';
+import { HttpError, ok } from './http';
+import { dayBoundsMVD, localDayKeyMVD } from './time';
 
 // ─── Constantes (umbrales nombrados, nada mágico disperso) ────────────────────
 
@@ -46,6 +53,18 @@ export type StallResult = {
   deloadSuggested: boolean;
   rationale: string;
   sessionsAnalyzed: number;
+  eligible: boolean; // true si hubo sesiones suficientes para evaluar meseta
+  deloadPctMin?: number;
+  deloadPctMax?: number;
+};
+
+// Resultado de combinar el detectStall de varios ejercicios en un único aviso por rutina
+// (decisión de Santi: el deload es GLOBAL por rutina, no por ejercicio).
+export type RoutineStallResult = {
+  deloadSuggested: boolean;
+  rationale: string;
+  eligibleExercises: number;
+  stalledExercises: number;
   deloadPctMin?: number;
   deloadPctMax?: number;
 };
@@ -184,6 +203,7 @@ export function detectStall(
       deloadSuggested: false,
       rationale: `Necesitás al menos ${window} sesiones para evaluar si hay meseta (tenés ${sessions.length}).`,
       sessionsAnalyzed: sessions.length,
+      eligible: false,
     };
   }
 
@@ -201,6 +221,7 @@ export function detectStall(
       deloadSuggested: false,
       rationale: `Tu 1RM estimado mejoró en alguna de las últimas ${window} sesiones — seguís progresando.`,
       sessionsAnalyzed: window,
+      eligible: true,
     };
   }
 
@@ -208,7 +229,112 @@ export function detectStall(
     deloadSuggested: true,
     rationale: `Tu mejor set (1RM estimado) no mejoró en las últimas ${window} sesiones — podría convenir una semana de descarga.`,
     sessionsAnalyzed: window,
+    eligible: true,
     deloadPctMin: DELOAD_PCT_MIN,
     deloadPctMax: DELOAD_PCT_MAX,
   };
 }
+
+// ─── summarizeRoutineStall ───────────────────────────────────────────────────────
+// Combina el detectStall de cada ejercicio de una rutina en un único aviso (deload global,
+// decisión de Santi). Regla: si la mayoría de los ejercicios CON datos suficientes están en
+// meseta, se sugiere la semana de descarga para toda la rutina.
+export function summarizeRoutineStall(perExercise: StallResult[]): RoutineStallResult {
+  const eligible = perExercise.filter((r) => r.eligible);
+  if (eligible.length === 0) {
+    return {
+      deloadSuggested: false,
+      rationale: 'Todavía no hay suficientes sesiones en los ejercicios de esta rutina para evaluar meseta.',
+      eligibleExercises: 0,
+      stalledExercises: 0,
+    };
+  }
+
+  const stalled = eligible.filter((r) => r.deloadSuggested);
+  const deloadSuggested = stalled.length / eligible.length >= 0.5;
+
+  if (!deloadSuggested) {
+    return {
+      deloadSuggested: false,
+      rationale: `${stalled.length} de ${eligible.length} ejercicios con datos suficientes están en meseta — todavía no alcanza para sugerir una semana de descarga.`,
+      eligibleExercises: eligible.length,
+      stalledExercises: stalled.length,
+    };
+  }
+
+  return {
+    deloadSuggested: true,
+    rationale: `${stalled.length} de ${eligible.length} ejercicios con datos suficientes están en meseta — podría convenir una semana de descarga para toda la rutina.`,
+    eligibleExercises: eligible.length,
+    stalledExercises: stalled.length,
+    deloadPctMin: DELOAD_PCT_MIN,
+    deloadPctMax: DELOAD_PCT_MAX,
+  };
+}
+
+// ─── Router de solo lectura (/analysis) ─────────────────────────────────────────
+// Todos requireAuth (montado en server.ts), scoping por userId con findFirst({ id, userId })
+// (mismo patrón anti-IDOR que body-weight.ts), envelope { success, data }. CERO escrituras.
+
+export const analysisRouter = Router();
+
+// Trae las series de un ejercicio ya agrupadas en sesiones por día local (mismo criterio que
+// /exercises/:id/last y ProgressScreen: hora Uruguay, no UTC).
+async function loadExerciseSessions(exerciseId: string): Promise<SessionSummary[]> {
+  const sets = await prisma.workoutSet.findMany({
+    where: { exerciseId },
+    orderBy: { date: 'asc' },
+  });
+  const byDay = new Map<string, SessionInput>();
+  for (const s of sets) {
+    const dayKey = localDayKeyMVD(s.date);
+    const existing = byDay.get(dayKey);
+    if (existing) {
+      existing.sets.push({ weight: s.weight, reps: s.reps, rir: s.rir });
+    } else {
+      byDay.set(dayKey, {
+        dayKey,
+        date: dayBoundsMVD(s.date).start.toISOString(),
+        sets: [{ weight: s.weight, reps: s.reps, rir: s.rir }],
+      });
+    }
+  }
+  return summarizeSessions([...byDay.values()]);
+}
+
+// GET /analysis/exercise/:id — sugerencia de carga (subir/mantener/bajar/sin-datos).
+analysisRouter.get('/exercise/:id', async (req, res) => {
+  const userId = getUserId(req);
+  const { id } = req.params;
+  const exercise = await prisma.exercise.findFirst({ where: { id, userId } });
+  if (!exercise) throw new HttpError(404, 'Ejercicio no encontrado');
+
+  const sessions = await loadExerciseSessions(id);
+  const suggestion = suggestLoad(sessions);
+  ok(res, suggestion);
+});
+
+// GET /analysis/routine/:id/deload — aviso global de semana de descarga para la rutina.
+analysisRouter.get('/routine/:id/deload', async (req, res) => {
+  const userId = getUserId(req);
+  const { id } = req.params;
+  const routine = await prisma.routine.findFirst({
+    where: { id, userId },
+    include: { days: { include: { exercises: { select: { exerciseId: true } } } } },
+  });
+  if (!routine) throw new HttpError(404, 'Rutina no encontrada');
+
+  const exerciseIds = new Set<string>();
+  for (const day of routine.days) {
+    for (const item of day.exercises) exerciseIds.add(item.exerciseId);
+  }
+
+  const stallResults: StallResult[] = [];
+  for (const exerciseId of exerciseIds) {
+    const sessions = await loadExerciseSessions(exerciseId);
+    stallResults.push(detectStall(sessions));
+  }
+
+  const summaryResult = summarizeRoutineStall(stallResults);
+  ok(res, summaryResult);
+});

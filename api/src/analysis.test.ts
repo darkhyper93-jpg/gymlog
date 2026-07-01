@@ -5,9 +5,10 @@ import {
   summarizeSessions,
   suggestLoad,
   detectStall,
+  summarizeRoutineStall,
   MIN_SESSIONS,
 } from './analysis';
-import type { SessionInput, SessionSummary } from './analysis';
+import type { SessionInput, SessionSummary, StallResult } from './analysis';
 
 function session(dayKey: string, weight: number, reps: number, rir: number | null): SessionInput {
   return { dayKey, date: `${dayKey}T12:00:00.000Z`, sets: [{ weight, reps, rir }] };
@@ -163,5 +164,56 @@ test('detectStall — pocas sesiones no sugiere deload', () => {
   const sessions = [summary('2026-06-01', 80, 8, 2)];
   const result = detectStall(sessions);
   assert.equal(result.deloadSuggested, false);
+  assert.equal(result.eligible, false);
   assert.match(result.rationale, /Necesitás al menos/);
+});
+
+test('summarizeRoutineStall — mayoría en meseta sugiere deload global', () => {
+  const stalled: StallResult = {
+    deloadSuggested: true,
+    rationale: 'x',
+    sessionsAnalyzed: 3,
+    eligible: true,
+    deloadPctMin: 0.1,
+    deloadPctMax: 0.2,
+  };
+  const progressing: StallResult = {
+    deloadSuggested: false,
+    rationale: 'x',
+    sessionsAnalyzed: 3,
+    eligible: true,
+  };
+  const result = summarizeRoutineStall([stalled, stalled, progressing]);
+  assert.equal(result.deloadSuggested, true);
+  assert.equal(result.eligibleExercises, 3);
+  assert.equal(result.stalledExercises, 2);
+});
+
+test('summarizeRoutineStall — sin ejercicios elegibles no sugiere nada', () => {
+  const notEligible: StallResult = {
+    deloadSuggested: false,
+    rationale: 'x',
+    sessionsAnalyzed: 1,
+    eligible: false,
+  };
+  const result = summarizeRoutineStall([notEligible, notEligible]);
+  assert.equal(result.deloadSuggested, false);
+  assert.equal(result.eligibleExercises, 0);
+});
+
+test('summarizeRoutineStall — minoría en meseta no alcanza', () => {
+  const stalled: StallResult = {
+    deloadSuggested: true,
+    rationale: 'x',
+    sessionsAnalyzed: 3,
+    eligible: true,
+  };
+  const progressing: StallResult = {
+    deloadSuggested: false,
+    rationale: 'x',
+    sessionsAnalyzed: 3,
+    eligible: true,
+  };
+  const result = summarizeRoutineStall([stalled, progressing, progressing]);
+  assert.equal(result.deloadSuggested, false);
 });

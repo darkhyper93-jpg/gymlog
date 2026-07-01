@@ -107,6 +107,9 @@ model Routine {
   order     Int          @default(0)
   createdAt DateTime     @default(now())
   days      RoutineDay[]
+  // Sugerencias de carga/deload (solo lectura) para ESTA rutina. Default OFF: el guard de
+  // activación exige que todos los ejercicios de la rutina tengan ≥1 serie con peso.
+  autoDeloadEnabled Boolean @default(false)
 }
 
 model RoutineDay {

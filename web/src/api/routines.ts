@@ -7,8 +7,10 @@ export const listRoutines = (): Promise<Routine[]> =>
 export const createRoutine = (name: string): Promise<Routine> =>
   apiRequest<Routine>('/routines', { method: 'POST', body: { name } });
 
-export const updateRoutine = (id: string, data: { name?: string; order?: number }): Promise<Routine> =>
-  apiRequest<Routine>(`/routines/${id}`, { method: 'PATCH', body: data });
+export const updateRoutine = (
+  id: string,
+  data: { name?: string; order?: number; autoDeloadEnabled?: boolean },
+): Promise<Routine> => apiRequest<Routine>(`/routines/${id}`, { method: 'PATCH', body: data });
 
 export const deleteRoutine = (id: string): Promise<{ id: string }> =>
   apiRequest<{ id: string }>(`/routines/${id}`, { method: 'DELETE' });

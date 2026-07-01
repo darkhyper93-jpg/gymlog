@@ -17,9 +17,11 @@ function parseName(body: unknown): string {
   return b.name.trim();
 }
 
-function parseNameOrOrder(body: unknown): { name?: string; order?: number } {
+type RoutinePatchBody = { name?: string; order?: number; autoDeloadEnabled?: boolean };
+
+function parseNameOrOrder(body: unknown): RoutinePatchBody {
   const b = (body ?? {}) as Record<string, unknown>;
-  const data: { name?: string; order?: number } = {};
+  const data: RoutinePatchBody = {};
   if (b.name !== undefined) {
     if (typeof b.name !== 'string' || b.name.trim() === '') {
       throw new HttpError(400, 'name debe ser texto no vacío');
@@ -32,10 +34,52 @@ function parseNameOrOrder(body: unknown): { name?: string; order?: number } {
     }
     data.order = b.order;
   }
-  if (data.name === undefined && data.order === undefined) {
-    throw new HttpError(400, 'Hay que enviar al menos name u order');
+  if (b.autoDeloadEnabled !== undefined) {
+    if (typeof b.autoDeloadEnabled !== 'boolean') {
+      throw new HttpError(400, 'autoDeloadEnabled debe ser booleano');
+    }
+    data.autoDeloadEnabled = b.autoDeloadEnabled;
+  }
+  if (data.name === undefined && data.order === undefined && data.autoDeloadEnabled === undefined) {
+    throw new HttpError(400, 'Hay que enviar al menos name, order o autoDeloadEnabled');
   }
   return data;
+}
+
+// Guard de activación (autorregulación, decisión #2 de Santi): cuenta los ejercicios
+// DISTINTOS de la rutina (los de sus días) que no tengan ninguna serie con peso registrado.
+// Si hay ≥1, rechaza con 400 listando cuáles. Desactivar nunca pasa por acá.
+async function assertRoutineEligibleForAutoDeload(routineId: string): Promise<void> {
+  const routine = await prisma.routine.findUnique({
+    where: { id: routineId },
+    include: { days: { include: { exercises: { include: { exercise: true } } } } },
+  });
+  if (!routine) throw new HttpError(404, 'Rutina no encontrada');
+
+  const exercisesById = new Map<string, { id: string; name: string }>();
+  for (const day of routine.days) {
+    for (const item of day.exercises) {
+      exercisesById.set(item.exerciseId, { id: item.exerciseId, name: item.exercise.name });
+    }
+  }
+  if (exercisesById.size === 0) {
+    throw new HttpError(400, 'La rutina no tiene ejercicios todavía; agregá al menos uno con series registradas.');
+  }
+
+  const withWeight = await prisma.workoutSet.findMany({
+    where: { exerciseId: { in: [...exercisesById.keys()] } },
+    select: { exerciseId: true },
+    distinct: ['exerciseId'],
+  });
+  const withWeightIds = new Set(withWeight.map((s) => s.exerciseId));
+
+  const missing = [...exercisesById.values()].filter((ex) => !withWeightIds.has(ex.id));
+  if (missing.length > 0) {
+    throw new HttpError(
+      400,
+      `Para activar las sugerencias, cargá al menos una serie con peso en: ${missing.map((e) => e.name).join(', ')}`,
+    );
+  }
 }
 
 // Include reutilizable para cargar rutina completa (días → ejercicios → Exercise).
@@ -76,14 +120,20 @@ routinesRouter.post('/', async (req, res) => {
   ok(res, routine, 201);
 });
 
-// PATCH /routines/:id — renombrar o reordenar { name?, order? }
+// PATCH /routines/:id — renombrar, reordenar o { autoDeloadEnabled } (activar exige el guard)
 routinesRouter.patch('/:id', async (req, res) => {
   const userId = getUserId(req);
   const { id } = req.params;
   const data = parseNameOrOrder(req.body);
   const existing = await prisma.routine.findFirst({ where: { id, userId } });
   if (!existing) throw new HttpError(404, 'Rutina no encontrada');
-  const routine = await prisma.routine.update({ where: { id }, data });
+
+  // Activar (false → true) exige el guard; desactivar nunca se bloquea.
+  if (data.autoDeloadEnabled === true && !existing.autoDeloadEnabled) {
+    await assertRoutineEligibleForAutoDeload(id);
+  }
+
+  const routine = await prisma.routine.update({ where: { id }, data, include: fullInclude });
   ok(res, routine);
 });
 
