@@ -17,3 +17,7 @@ dist-ssr/
 # Logs y temporales
 *.log
 .DS_Store
+
+# Instrucciones
+.claude/
+claude/
