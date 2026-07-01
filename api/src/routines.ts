@@ -66,8 +66,10 @@ async function assertRoutineEligibleForAutoDeload(routineId: string): Promise<vo
     throw new HttpError(400, 'La rutina no tiene ejercicios todavía; agregá al menos uno con series registradas.');
   }
 
+  // weight: { gt: 0 } — una serie con peso 0 (ej. peso corporal) no cuenta: el motor la
+  // filtra como outlier (analysis.ts summarizeSessions) y no generaría ninguna sugerencia.
   const withWeight = await prisma.workoutSet.findMany({
-    where: { exerciseId: { in: [...exercisesById.keys()] } },
+    where: { exerciseId: { in: [...exercisesById.keys()] }, weight: { gt: 0 } },
     select: { exerciseId: true },
     distinct: ['exerciseId'],
   });
