@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { parseImport, commitImport } from '../api/import';
-import type { ImportDay, ImportExercise, ImportRoutine, Routine } from '../types';
+import type { ImportDay, ImportExercise, ImportRoutine, MuscleGroup, Routine } from '../types';
 import { ApiError } from '../api/client';
-import { Button, Spinner, TextInput } from './ui';
+import { Button, Select, Spinner, TextInput } from './ui';
 import { AlertTriangleIcon, DumbbellIcon, PlusIcon, TrashIcon } from './icons';
+import { MUSCLE_GROUPS } from '../muscleGroups';
+import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -13,7 +15,15 @@ type Phase = 'input' | 'parsing' | 'error' | 'preview';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function emptyExercise(): ImportExercise {
-  return { name: '', plannedSets: null, plannedReps: null, plannedRir: null, restSeconds: null, note: null };
+  return {
+    name: '',
+    plannedSets: null,
+    plannedReps: null,
+    plannedRir: null,
+    restSeconds: null,
+    note: null,
+    muscleGroup: null,
+  };
 }
 
 function toIntOrNull(v: string): number | null {
@@ -38,6 +48,7 @@ function cleanForCommit(r: ImportRoutine): ImportRoutine {
         plannedRir: nullIfEmpty(ex.plannedRir ?? ''),
         restSeconds: ex.restSeconds,
         note: nullIfEmpty(ex.note ?? ''),
+        muscleGroup: ex.muscleGroup,
       })),
     })),
   };
@@ -51,10 +62,12 @@ function hasUnnamedExercise(r: ImportRoutine): boolean {
 
 function ExerciseRow({
   ex,
+  customGroups,
   onChange,
   onRemove,
 }: {
   ex: ImportExercise;
+  customGroups: MuscleGroup[];
   onChange: (updated: ImportExercise) => void;
   onRemove: () => void;
 }) {
@@ -150,6 +163,21 @@ function ExerciseRow({
         </label>
       </div>
       <label className="mt-2 flex flex-col gap-1">
+        <span className="text-xs text-muted">Grupo muscular</span>
+        <Select
+          value={ex.muscleGroup ?? ''}
+          onChange={(e) => onChange({ ...ex, muscleGroup: e.target.value || null })}
+        >
+          <option value="">Otros</option>
+          {MUSCLE_GROUPS.map((g) => (
+            <option key={g.key} value={g.key}>{g.label}</option>
+          ))}
+          {customGroups.map((g) => (
+            <option key={g.id} value={g.name}>{g.name}</option>
+          ))}
+        </Select>
+      </label>
+      <label className="mt-2 flex flex-col gap-1">
         <span className="text-xs text-muted">Nota</span>
         <input
           type="text"
@@ -184,6 +212,7 @@ export function ImportRoutineModal({
   const [commitError, setCommitError] = useState('');
   const [committing, setCommitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { groups: customGroups } = useMuscleGroups();
 
   // ── Input phase ────────────────────────────────────────────────────────────
 
@@ -384,6 +413,7 @@ export function ImportRoutineModal({
                       <ExerciseRow
                         key={ei}
                         ex={ex}
+                        customGroups={customGroups}
                         onChange={(updated) => updateExercise(di, ei, updated)}
                         onRemove={() => removeExercise(di, ei)}
                       />
