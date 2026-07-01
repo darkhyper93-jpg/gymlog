@@ -74,6 +74,14 @@ Post-V1 — V2 (rama v2-postre, 2026-06-24):
 · [x] PRs auto-detectados + toast de celebración: peso máximo y 1RM Epley en POST /sets.
 · [x] Logros: 10 logros estáticos evaluados server-side, desbloqueados al cargar series.
 
+Post-V2 — autorregulación (rama feat/subir-bajar-peso, 2026-07-01):
+· Predicción de carga por ejercicio (doble progresión + RIR: subir/mantener/bajar) y
+  detección de meseta con sugerencia de semana de descarga (deload), **por rutina**.
+· Toggle `Routine.autoDeloadEnabled` (default OFF); solo se puede activar si todos los
+  ejercicios de la rutina tienen al menos un peso registrado (guard server-side).
+· Todo es sugerencia de solo lectura: el motor y los endpoints de análisis NUNCA
+  escriben en la base ni tocan el plan. Ver detalle en `.claude/plans/subir-bajar-peso.md`.
+
 
 ══════════════════════════════════════════════════════════════════════════════
 5. STACK (CON QUÉ ESTÁ HECHA)
@@ -142,6 +150,9 @@ User (para el login)
 Routine (rutina personalizada) [V2]
 · id, name, userId, order, createdAt
 · days — lista de RoutineDay (ordenados por order)
+· autoDeloadEnabled — Boolean, default false [autorregulación]. Activa las sugerencias de
+  carga/deload de solo lectura para ESTA rutina. Solo se puede activar si todos los
+  ejercicios de la rutina tienen ≥1 serie con peso (guard server-side en PATCH /routines/:id).
 
 RoutineDay (día dentro de una rutina) [V2]
 · id, name, routineId, order
@@ -200,6 +211,12 @@ Importar rutinas [importar-rutinas]:
 
 Logros [V2]:
 · GET    /achievements         — todas las defs + estado desbloqueado del usuario
+
+Autorregulación [autorregulación] (todos de solo lectura, cero escrituras en /analysis):
+· PATCH  /routines/:id                    — (extendido) también acepta { autoDeloadEnabled }
+                                             con el guard de activación (ver §11)
+· GET    /analysis/exercise/:id           — sugerencia subir/mantener/bajar para el ejercicio
+· GET    /analysis/routine/:id/deload     — estado de meseta/deload de la rutina (global)
 
 Todos validan el input externo y devuelven el envelope { success, data } (o
 { success: false, error } con el status correcto, vía handler de error central).
@@ -360,6 +377,23 @@ V2 COMPLETO (rama v2-postre, 2026-06-24). Pendiente: merge a main + deploy manua
   (GEMINI_API_KEY), nunca en el frontend. Modelo B2: campos planeados en RoutineDayExercise
   (todos nullable, sin pérdida de datos). Dedup de ejercicios por nombre case-insensitive,
   scopeado por userId. El preview es humano antes de crear nada — nada se guarda sin confirmación.
+· [autorregulación] Ciclo reactivo por rendimiento, NO por tiempo: no hay semanas fijas ni
+  fecha ancla; el deload se sugiere cuando el motor detecta meseta (mejor set/1RM estimado sin
+  mejorar en `window` sesiones). Cero estado de tiempo persistido.
+· [autorregulación] El feature es **por rutina**, no por usuario: `Routine.autoDeloadEnabled`
+  (default OFF). El guard de activación (en PATCH /routines/:id) cuenta los ejercicios DE ESA
+  rutina (los distintos ejercicios de sus días) sin ninguna serie con peso registrado; si falta
+  ≥1, responde 400 listando cuáles. Desactivar nunca se bloquea.
+· [autorregulación] Motor puro en api/src/analysis.ts (sin Prisma/Express, testeable con
+  node --test): `est1RM` centralizado ahí (api/src/sets.ts lo importa; el frontend mantiene su
+  propia copia porque no hay paquete compartido api/web), `suggestLoad` (doble progresión + RIR,
+  minSessions=3, increment=2.5kg, degrada sin RIR bajando confidence) y `detectStall` (ventana=3
+  sesiones sin mejora → sugiere deload −10 a −20%).
+· [autorregulación] Nada se auto-aplica: tanto la sugerencia de carga por ejercicio como la de
+  deload son SOLO sugerencias detrás del toggle. Los endpoints GET /analysis/* son de solo
+  lectura (scopeados por userId, findFirst({id, userId}) anti-IDOR) y ni ellos ni el motor
+  escriben en la base ni tocan los targets del plan. El deload es global por rutina (un aviso),
+  no por ejercicio. Sello constante en la UI: "Sugerencia — vos decidís".
 
 
 ══════════════════════════════════════════════════════════════════════════════

@@ -19,5 +19,6 @@ dist-ssr/
 .DS_Store
 
 # Instrucciones
-.claude/
+.claude/*
+!.claude/plans/
 claude/
