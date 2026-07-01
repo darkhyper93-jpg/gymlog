@@ -4,17 +4,12 @@ import { getUserId } from './auth';
 import { HttpError, ok } from './http';
 import { computeStats, unlockNewAchievements } from './achievements';
 import { dayBoundsMVD } from './time';
+import { est1RM } from './analysis';
 
 export const setsRouter = Router();
 
 type CreateSetBody = { exerciseId: string; weight: number; reps: number; rir?: number; date?: Date; note?: string };
 type UpdateSetBody = { weight?: number; reps?: number; rir?: number | null; note?: string | null };
-
-// DECISIÓN: Epley — la fórmula de 1RM más difundida, sin tablas de lookup.
-// Se usa tanto para detectar PRs al crear una serie como para calcular progreso en el frontend.
-function est1RM(weight: number, reps: number): number {
-  return weight * (1 + reps / 30);
-}
 
 // Recalcula el estado de logros tras editar o borrar una serie (récords/volumen/días/racha).
 // DECISIÓN: includeNewPR = false y unlockNewAchievements solo inserta (nunca borra), así no se
