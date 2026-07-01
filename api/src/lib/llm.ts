@@ -1,6 +1,15 @@
 import { z } from 'zod';
+import winston from 'winston';
 import { HttpError } from '../http.js';
 import { normalizeMg } from '../muscle-groups.js';
+
+// LOGGING TEMPORAL para diagnosticar el 502 de import en prod (ver README/tarea de debug).
+// TODO: borrar este logger y los logger.error de abajo una vez identificada la causa.
+const logger = winston.createLogger({
+  level: 'error',
+  format: winston.format.simple(),
+  transports: [new winston.transports.Console()],
+});
 
 // Topes para no explotar con salida del LLM o body del commit malformado.
 const MAX_DAYS = 14;
@@ -186,12 +195,17 @@ export async function extractRoutine(text: string, allowedGroups: string[]): Pro
     });
 
     if (!resp.ok) {
+      const bodyText = (await resp.text()).slice(0, 500);
+      logger.error('Gemini respondió con error', { status: resp.status, body: bodyText });
       throw new HttpError(502, 'El servicio de IA no pudo procesar el documento');
     }
 
     raw = (await resp.json()) as GeminiResponse;
   } catch (err) {
     if (err instanceof HttpError) throw err;
+    if (err instanceof Error) {
+      logger.error('Fetch a Gemini falló', { name: err.name, message: err.message });
+    }
     throw new HttpError(502, 'El servicio de IA no pudo procesar el documento');
   } finally {
     clearTimeout(timeout);
