@@ -4,7 +4,7 @@ import type { Exercise, WorkoutSet } from '../types';
 import { useRegister } from '../hooks/useRegister';
 import { muscleGroupLabel } from '../muscleGroups';
 import { Button, Card, Chip, NumberField, SectionLabel, Spinner, StateView } from './ui';
-import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon } from './icons';
+import { AlertTriangleIcon, CheckCircleIcon, GripVerticalIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
 import { useRestTimerActions } from '../timer/restTimerContexts';
 import { todayKeyMVD } from '../time';
 import { Toast } from './Toast';
@@ -15,7 +15,13 @@ import { CSS } from '@dnd-kit/utilities';
 
 // Pantalla "registrar hoy": el corazón del V1. Muestra objetivo + última vez para superar,
 // y deja cargar series rápido (pocos toques, prefill inteligente, alta optimista).
-export function RegisterScreen({ exercise }: { exercise: Exercise }) {
+export function RegisterScreen({
+  exercise,
+  plannedRestSeconds,
+}: {
+  exercise: Exercise;
+  plannedRestSeconds?: number | null;
+}) {
   const { status, error, todaySets, reference, reload, addSet, removeSet, editSet, reorderTodaySets } = useRegister(exercise.id);
   const timer = useRestTimerActions();
   const [toast, setToast] = useState<string | null>(null);
@@ -27,8 +33,8 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
       if (input.isLastSet) {
         const between = loadRestBetweenExercises();
         if (between > 0) timer.start(between);
-      } else if (exercise.restSeconds != null && exercise.restSeconds > 0) {
-        timer.start(exercise.restSeconds);
+      } else if (plannedRestSeconds != null && plannedRestSeconds > 0) {
+        timer.start(plannedRestSeconds);
       }
       if (achievements.length > 0) {
         setToast(`Logro: ${achievements[0].title}`);
@@ -38,7 +44,7 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
         setToast('¡Nuevo récord de peso!');
       }
     },
-    [addSet, exercise.restSeconds, timer],
+    [addSet, plannedRestSeconds, timer],
   );
 
   return (
@@ -46,11 +52,6 @@ export function RegisterScreen({ exercise }: { exercise: Exercise }) {
       <header className="flex flex-col gap-3">
         <h2 className="text-3xl font-bold tracking-tight text-fg">{exercise.name}</h2>
         <div className="flex flex-wrap gap-2">
-          {exercise.target ? (
-            <Chip icon={<TargetIcon className="h-4 w-4" />}>{exercise.target}</Chip>
-          ) : (
-            <p className="text-sm text-muted/70">Sin objetivo definido</p>
-          )}
           {exercise.muscleGroup && <Chip tone="neutral">{muscleGroupLabel(exercise.muscleGroup)}</Chip>}
         </div>
       </header>

@@ -30,7 +30,9 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 // Sub-vista register: se abre desde Ejercicios o desde un día de rutina; el botón ← vuelve.
-type SubView = { name: 'register'; exercise: Exercise } | null;
+type SubView =
+  | { name: 'register'; exercise: Exercise; plannedRestSeconds?: number | null }
+  | null;
 
 export default function App() {
   const { isAuthed, logout } = useAuth();
@@ -104,14 +106,19 @@ export default function App() {
       {/* pb-24 en mobile para que la bottom-nav no tape el contenido; pb-12 en desktop */}
       <main className={`mx-auto w-full flex-1 px-4 pb-24 pt-5 md:pb-12 ${wideClass}`}>
         {isRegister ? (
-          <RegisterScreen exercise={subView!.exercise} />
+          <RegisterScreen
+            exercise={subView!.exercise}
+            plannedRestSeconds={subView!.plannedRestSeconds}
+          />
         ) : tab === 'ejercicios' ? (
           <ExercisesScreen
             onSelect={(exercise) => setSubView({ name: 'register', exercise })}
           />
         ) : tab === 'rutinas' ? (
           <RoutinesScreen
-            onRegister={(exercise) => setSubView({ name: 'register', exercise })}
+            onRegister={(exercise, plannedRestSeconds) =>
+              setSubView({ name: 'register', exercise, plannedRestSeconds })
+            }
           />
         ) : tab === 'progreso' ? (
           <ProgressScreen />

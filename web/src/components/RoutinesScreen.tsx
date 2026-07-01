@@ -5,7 +5,7 @@ import { useRoutines } from '../hooks/useRoutines';
 import { useExercises } from '../hooks/useExercises';
 import { useTodaySets } from '../hooks/useTodaySets';
 import { muscleGroupLabel, MUSCLE_GROUPS } from '../muscleGroups';
-import { Button, Card, IconButton, Modal, Spinner, StateView, TextInput } from './ui';
+import { Button, Card, IconButton, Modal, NumberField, Spinner, StateView, TextInput } from './ui';
 import { ImportRoutineModal } from './ImportRoutineModal';
 import {
   AlertTriangleIcon,
@@ -18,6 +18,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from './icons';
+import type { ItemPlanPatch } from '../api/routines';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -86,6 +87,7 @@ type ModalState =
   | { type: 'add-day'; routineId: string }
   | { type: 'edit-day'; routineId: string; day: RoutineDay }
   | { type: 'add-exercise'; routineId: string; dayId: string }
+  | { type: 'edit-item-plan'; routineId: string; dayId: string; item: RoutineDayExercise }
   | { type: 'today-session' }
   | { type: 'import' }
   | null;
@@ -151,6 +153,98 @@ function NameModal({
         />
         {err && <p className="text-sm text-danger">{err}</p>}
         <Button type="submit" disabled={saving || !name.trim()}>
+          {saving ? 'Guardando…' : 'Guardar'}
+        </Button>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── ItemPlanModal ────────────────────────────────────────────────────────────
+
+function ItemPlanModal({
+  item,
+  onSubmit,
+  onClose,
+}: {
+  item: RoutineDayExercise;
+  onSubmit: (patch: ItemPlanPatch) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [plannedSets, setPlannedSets] = useState(
+    item.plannedSets != null ? String(item.plannedSets) : '',
+  );
+  const [plannedReps, setPlannedReps] = useState(item.plannedReps ?? '');
+  const [plannedRir, setPlannedRir] = useState(item.plannedRir ?? '');
+  const [restSeconds, setRestSeconds] = useState(
+    item.restSeconds != null ? String(item.restSeconds) : '',
+  );
+  const [note, setNote] = useState(item.note ?? '');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setErr(null);
+    try {
+      await onSubmit({
+        plannedSets: plannedSets.trim() === '' ? null : Number(plannedSets),
+        plannedReps: plannedReps.trim() === '' ? null : plannedReps.trim(),
+        plannedRir: plannedRir.trim() === '' ? null : plannedRir.trim(),
+        restSeconds: restSeconds.trim() === '' ? null : Number(restSeconds),
+        note: note.trim() === '' ? null : note.trim(),
+      });
+      onClose();
+    } catch (caught) {
+      setErr(caught instanceof Error ? caught.message : 'Error al guardar');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={`Plan: ${item.exercise.name}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex gap-2">
+          <NumberField
+            label="Series"
+            value={plannedSets}
+            onChange={(e) => setPlannedSets(e.target.value)}
+            placeholder="—"
+          />
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs font-medium text-muted">Reps</label>
+            <TextInput
+              value={plannedReps}
+              onChange={(e) => setPlannedReps(e.target.value)}
+              placeholder="ej: 8-10"
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <label className="text-xs font-medium text-muted">RIR</label>
+            <TextInput
+              value={plannedRir}
+              onChange={(e) => setPlannedRir(e.target.value)}
+              placeholder="ej: 2"
+            />
+          </div>
+        </div>
+        <NumberField
+          label="Descanso (segundos)"
+          value={restSeconds}
+          onChange={(e) => setRestSeconds(e.target.value)}
+          placeholder="—"
+        />
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">Nota</label>
+          <TextInput
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Nota opcional…"
+          />
+        </div>
+        {err && <p className="text-sm text-danger">{err}</p>}
+        <Button type="submit" disabled={saving}>
           {saving ? 'Guardando…' : 'Guardar'}
         </Button>
       </form>
@@ -388,11 +482,13 @@ function ExerciseRow({
   todaySets,
   onRemove,
   onRegister,
+  onEditPlan,
 }: {
   item: RoutineDayExercise;
   todaySets: WorkoutSet[] | undefined;
   onRemove: () => void;
-  onRegister: (ex: Exercise) => void;
+  onRegister: (ex: Exercise, plannedRestSeconds?: number | null) => void;
+  onEditPlan: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -427,9 +523,6 @@ function ExerciseRow({
         </span>
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0">
           <span className="text-xs text-muted">{muscleGroupLabel(item.exercise.muscleGroup)}</span>
-          {item.exercise.target && (
-            <span className="text-xs text-muted">· {item.exercise.target}</span>
-          )}
         </div>
         {formatPlanned(item) && (
           <span className="text-xs font-medium text-brand/80">{formatPlanned(item)}</span>
@@ -439,12 +532,15 @@ function ExerciseRow({
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-1">
         <button
-          onClick={() => onRegister(item.exercise)}
+          onClick={() => onRegister(item.exercise, item.restSeconds)}
           className="whitespace-nowrap rounded-lg border border-border px-2.5 py-1.5 text-xs
             font-semibold text-muted transition-colors hover:border-brand hover:text-brand"
         >
           Registrar
         </button>
+        <IconButton aria-label="Editar plan" onClick={onEditPlan} className="h-8 w-8">
+          <PencilIcon className="h-3.5 w-3.5" />
+        </IconButton>
         <button
           onClick={onRemove}
           aria-label="Quitar ejercicio"
@@ -470,6 +566,7 @@ function DaySection({
   onOpenAddExercise,
   onOpenEditDay,
   onRegister,
+  onOpenModal,
 }: {
   day: RoutineDay;
   routineId: string;
@@ -479,7 +576,8 @@ function DaySection({
   todaySelection: TodaySelection | null;
   onOpenAddExercise: () => void;
   onOpenEditDay: () => void;
-  onRegister: (ex: Exercise) => void;
+  onRegister: (ex: Exercise, plannedRestSeconds?: number | null) => void;
+  onOpenModal: (state: ModalState) => void;
 }) {
   // Si hay selección manual, esa manda; si no, match por nombre de día.
   const isToday = todaySelection !== null
@@ -628,6 +726,9 @@ function DaySection({
                       }
                       onRemove={() => hook.removeExercise(routineId, day.id, item.id)}
                       onRegister={onRegister}
+                      onEditPlan={() =>
+                        onOpenModal({ type: 'edit-item-plan', routineId, dayId: day.id, item })
+                      }
                     />
                   ))}
                 </div>
@@ -672,7 +773,7 @@ function RoutineCard({
   todayAbbr: string;
   todaySelection: TodaySelection | null;
   onOpenModal: (state: ModalState) => void;
-  onRegister: (ex: Exercise) => void;
+  onRegister: (ex: Exercise, plannedRestSeconds?: number | null) => void;
 }) {
   const [localDays, setLocalDays] = useState<RoutineDay[]>(() =>
     [...routine.days].sort((a, b) => a.order - b.order),
@@ -758,6 +859,7 @@ function RoutineCard({
                         onOpenModal({ type: 'edit-day', routineId: routine.id, day })
                       }
                       onRegister={onRegister}
+                      onOpenModal={onOpenModal}
                     />
                   ))}
                 </div>
@@ -781,7 +883,11 @@ function RoutineCard({
 
 // ─── RoutinesScreen ───────────────────────────────────────────────────────────
 
-export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => void }) {
+export function RoutinesScreen({
+  onRegister,
+}: {
+  onRegister: (ex: Exercise, plannedRestSeconds?: number | null) => void;
+}) {
   const hook = useRoutines();
   const { routines, status, error, reload } = hook;
   const { byExercise } = useTodaySets();
@@ -944,6 +1050,13 @@ export function RoutinesScreen({ onRegister }: { onRegister: (ex: Exercise) => v
           onSelect={async (ex) => {
             await hook.addExercise(modal.routineId, modal.dayId, ex.id);
           }}
+          onClose={closeModal}
+        />
+      )}
+      {modal !== null && modal.type === 'edit-item-plan' && (
+        <ItemPlanModal
+          item={modal.item}
+          onSubmit={(patch) => hook.editItemPlan(modal.routineId, modal.dayId, modal.item.id, patch)}
           onClose={closeModal}
         />
       )}
